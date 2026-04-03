@@ -1,0 +1,46 @@
+# KynicOS — LLM Router Config
+# Prioridad: AMD MI300X (vLLM local) → Groq (free tier) → Anthropic → OpenAI
+# Actualizar OLLAMA_URL o VLLM_URL cuando se active el droplet AMD
+
+providers:
+  amd_vllm:
+    enabled: false  # Activar cuando esté listo el droplet AMD
+    url: "${AMD_VLLM_URL}"  # ej: http://192.168.1.100:8000/v1
+    model: "meta-llama/Llama-3.3-70B-Instruct"
+    priority: 1
+    cost_per_token: 0.0
+    context_window: 128000
+
+  ollama:
+    enabled: false  # Activar con OLLAMA_URL configurada
+    url: "${OLLAMA_URL:-http://localhost:11434}"
+    model: "${OLLAMA_MODEL:-llama3.1:70b}"
+    priority: 2
+    cost_per_token: 0.0
+
+  groq:
+    enabled: true
+    model: "llama-3.3-70b-versatile"
+    priority: 3
+    rpm_limit: 30
+    tpm_limit: 14400
+
+  anthropic:
+    enabled: true
+    model: "claude-3-5-haiku-20241022"
+    priority: 4
+    fallback: true
+
+  openai:
+    enabled: false
+    model: "gpt-4o-mini"
+    priority: 5
+
+# Configuración del router
+router:
+  strategy: "priority_with_fallback"
+  rate_limit_threshold: 0.85
+  health_check_interval: 60
+  retry_on_failure: true
+  max_retries: 2
+
