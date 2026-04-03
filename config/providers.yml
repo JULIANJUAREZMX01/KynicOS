@@ -1,0 +1,40 @@
+# KynicOS — LLM Provider Chain
+# Sin Anthropic. Cadena de fallback autárquica.
+# Cada provider es OPCIONAL excepto Groq.
+
+chain:
+  - name: groq
+    type: groq
+    required: true
+    models:
+      primary: llama-3.3-70b-versatile
+      fallback: llama-3.1-8b-instant    # downgrade automático si prompt > 8k tokens
+    max_tokens: 2048
+    free_tier_tpm: 12000
+
+  - name: together
+    type: together
+    required: false
+    url: https://api.together.xyz/v1/chat/completions
+    model: meta-llama/Llama-3.2-3B-Instruct-Turbo
+    free_credits: "$25 USD al registrarse"
+    max_tokens: 1024
+
+  - name: openrouter
+    type: openrouter
+    required: false
+    url: https://openrouter.ai/api/v1/chat/completions
+    model: mistralai/mistral-7b-instruct:free
+    note: "Modelos :free disponibles sin costo"
+    max_tokens: 1024
+
+  - name: ollama
+    type: ollama
+    required: false
+    url: "${OLLAMA_URL:-http://localhost:11434}"
+    model: "${OLLAMA_MODEL:-llama3.2:3b}"
+    note: "Autárquico. Sin internet, sin API key. docker-compose --profile ollama up"
+    max_tokens: 2048
+
+# Nota: Anthropic/Claude NO está en la cadena.
+# Claude existe solo en el entorno de configuración (Base44 Superagent).
