@@ -1,3 +1,5 @@
+import pytest
+
 from app.agents.concierge_loop import ConciergeAgentLoop
 from app.core.context import AgentContext
 from app.core.skill_engine import IMMUTABLE_SKILLS, _normalize_skill_name, _validate_skill_code
