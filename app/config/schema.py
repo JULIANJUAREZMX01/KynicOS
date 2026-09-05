@@ -5,7 +5,7 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables"""
+    """Application settings loaded from environment variables."""
 
     # ── Persona ──────────────────────────────────────────────
     persona: str = "leo"  # leo | nexus | mueve
@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     # ── Telegram ─────────────────────────────────────────────
     telegram_token: str
     telegram_user_id: str = ""
-    # Chat ID del técnico de mantenimiento (para escalación HVAC)
     tech_telegram_chat_id: Optional[str] = None
 
     # ── LLM Providers ────────────────────────────────────────
@@ -51,6 +50,12 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None
     aws_region: str = "us-east-1"
     s3_bucket: Optional[str] = None
+
+    # ── Sentinel ─────────────────────────────────────────────
+    sentinel_enabled: bool = True
+    log_check_interval: int = 5
+    alert_on_failure: bool = True
+    auto_healing_enabled: bool = False
 
     # ── App ──────────────────────────────────────────────────
     environment: str = "production"
