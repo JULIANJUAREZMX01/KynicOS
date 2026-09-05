@@ -37,6 +37,8 @@ async def lifespan(app: FastAPI):
     persona_name = os.getenv("PERSONA", settings.persona)
     persona = get_persona(persona_name)
     telegram_task = None
+    sentinel_task = None
+    sentinel = None
 
     try:
         Memory(workspace_path="./workspace")
@@ -49,6 +51,17 @@ async def lifespan(app: FastAPI):
         provider_manager = ProviderManager(settings)
         _agent_loop = ConciergeAgentLoop(settings, provider_manager, persona=persona)
         logger.info(f"✅ ConciergeAgentLoop ({persona.name}) OK")
+
+        try:
+            from app.core.sentinel import LogSentinel
+            sentinel = LogSentinel(settings)
+            if settings.sentinel_enabled:
+                sentinel_task = asyncio.create_task(sentinel.run())
+                logger.info("🐕 Sentinel lifecycle task started")
+            else:
+                logger.info("🐕 Sentinel disabled by configuration")
+        except Exception as e:
+            logger.warning(f"Sentinel no disponible: {e}")
 
         try:
             from app.cloud.whatsapp_bridge import init_whatsapp_bridge
@@ -71,6 +84,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Fatal error: {e}")
         raise
     finally:
+        if sentinel is not None:
+            sentinel.stop()
+        if sentinel_task:
+            sentinel_task.cancel()
+            try:
+                await sentinel_task
+            except asyncio.CancelledError:
+                pass
         if telegram_task:
             telegram_task.cancel()
             try:
@@ -115,21 +136,27 @@ async def root():
         "name": "KynicOS",
         "version": "1.0.0",
         "status": "running",
-        "persona": os.getenv("PERSONA", "leo"),
+        "persona": os.getenv("PERSONA", Settings().persona),
         "docs": "/docs",
     }
 
 
 @app.get("/api/status")
 async def status():
-    persona_name = os.getenv("PERSONA", "leo")
+    persona_name = os.getenv("PERSONA", Settings().persona)
+    settings = Settings()
     return JSONResponse({
         "status": "ok",
         "version": "1.0.0",
         "persona": persona_name,
         "agent_loop": _agent_loop is not None,
         "llm": "groq → anthropic → ollama",
-        "channels": ["telegram", "whatsapp"],
+        "channels": [
+            channel for channel, enabled in (
+                ("telegram", bool(settings.telegram_token)),
+                ("whatsapp", True),
+            ) if enabled
+        ],
         "skills": ["hvac_triage", "mueve_cancun", "concierge_llm"],
         "deploy_url": "https://nanobot-cloud-zjr0.onrender.com",
     })
@@ -137,7 +164,7 @@ async def status():
 
 @app.get("/api/persona")
 async def get_current_persona():
-    persona = get_persona(os.getenv("PERSONA", "leo"))
+    persona = get_persona(os.getenv("PERSONA", Settings().persona))
     return {
         "name": persona.name,
         "tone": persona.tone,
