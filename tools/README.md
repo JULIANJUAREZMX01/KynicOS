@@ -67,11 +67,14 @@ The script prepares prompts for independent reviewers and records availability o
 
 ## Current repository-specific checks
 
-The checklist preserves known audit gaps rather than falsely marking them resolved. In particular:
+The current branch contains fixes for the previously identified Concierge diagnostic crash path, durable `room_number` / `guest_name` context properties, and stale `IMMUTABLE_SKILLS` registry entries. The orchestrator checklist should therefore treat those items as static-fixed and reserve runtime/CI execution for independent evidence.
 
-- Concierge diagnostic empty-list behavior remains a caller-level audit item.
-- `room_number` / `guest_name` persistence requires caller-level verification.
-- Stale `IMMUTABLE_SKILLS` entries require cleanup.
-- CI/test success must be evidenced by an actual workflow run or local execution.
+Remaining verification focus:
+
+- Verify the Concierge regression test against the installed dependency set.
+- Verify callers populate `room_number` / `guest_name` from the actual channel/session flow where required.
+- Verify Sentinel startup/shutdown behavior at runtime.
+- Verify CI/test execution with an actual workflow run or local execution.
+- Review the remaining security-sensitive operational tools and trust boundaries.
 
 This tool is an orchestrator, not proof that the repository is production-ready. A `PASS-STATIC` result means only that the corresponding static action completed.
