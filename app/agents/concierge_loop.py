@@ -51,14 +51,14 @@ class ConciergeAgentLoop(AgentLoop):
         # ── Skill 1: HVAC Triage ─────────────────────────────
         symptom_key, issue_data = detect_hvac_issue(last_message)
         if symptom_key:
-            room = getattr(ctx, 'room_number', 'su habitación')
+            room = ctx.room_number or "su habitación"
             response = generate_hvac_response(symptom_key, issue_data, room)
-            
+
             # Escalar a técnico via Telegram si prioridad alta/media
             priority = get_ticket_priority(symptom_key)
             if priority in ("alta", "media"):
                 await self._escalate_maintenance_ticket(ctx, symptom_key, issue_data, priority)
-            
+
             logger.info(f"[HVAC] Skill activado — síntoma: {symptom_key}, prioridad: {priority}")
             ctx.add_message("assistant", response)
             return response
@@ -70,7 +70,7 @@ class ConciergeAgentLoop(AgentLoop):
                 response = format_route_response(route_info)
             else:
                 response = get_generic_transport_response()
-            
+
             logger.info(f"[MueveCancún] Skill de transporte activado")
             ctx.add_message("assistant", response)
             return response
@@ -83,7 +83,7 @@ class ConciergeAgentLoop(AgentLoop):
         return self.persona.system_prompt
 
     async def _escalate_maintenance_ticket(
-        self, ctx: AgentContext, symptom_key: str, 
+        self, ctx: AgentContext, symptom_key: str,
         issue_data: Dict, priority: str
     ):
         """
@@ -91,23 +91,27 @@ class ConciergeAgentLoop(AgentLoop):
         En Fase 2 también crea ticket en PostgreSQL y notifica al manager.
         """
         try:
-            room = getattr(ctx, 'room_number', 'desconocida')
-            guest_name = getattr(ctx, 'guest_name', 'Huésped')
-            
+            room = ctx.room_number or "desconocida"
+            guest_name = ctx.guest_name or "Huésped"
+            description = issue_data.get("descripcion") or symptom_key
+            eta = issue_data.get("eta_minutos", 30)
+            diagnostics = issue_data.get("diagnostico") or []
+            diagnostic_text = diagnostics[0] if diagnostics else "Diagnóstico no disponible; requiere inspección técnica."
+
             ticket_msg = (
                 f"🔧 *TICKET MANTENIMIENTO*\n"
                 f"Prioridad: {'🔴 ALTA' if priority == 'alta' else '🟡 MEDIA'}\n"
                 f"Habitación: {room}\n"
                 f"Huésped: {guest_name}\n"
-                f"Problema: {issue_data.get('descripcion', symptom_key)}\n"
-                f"ETA: {issue_data.get('eta_minutos', 30)} min\n\n"
-                f"Diagnóstico probable:\n{issue_data['diagnostico'][0]}"
+                f"Problema: {description}\n"
+                f"ETA: {eta} min\n\n"
+                f"Diagnóstico probable:\n{diagnostic_text}"
             )
-            
+
             # Enviar a Telegram del técnico (configurado en settings)
             await self._send_telegram_alert(ticket_msg)
             logger.info(f"[Escalation] Ticket enviado — hab {room}, prioridad {priority}")
-            
+
         except Exception as e:
             logger.error(f"[Escalation] Error al escalar: {e}")
 
@@ -118,7 +122,7 @@ class ConciergeAgentLoop(AgentLoop):
             telegram_token = self.settings.telegram_token
             # El chat_id de notificaciones técnicas (configurar en .env como TECH_TELEGRAM_CHAT_ID)
             tech_chat_id = getattr(self.settings, 'tech_telegram_chat_id', None)
-            
+
             if telegram_token and tech_chat_id:
                 bot = Bot(token=telegram_token)
                 await bot.send_message(

@@ -7,6 +7,7 @@ import ast
 import asyncio
 import importlib.util
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
@@ -27,10 +28,14 @@ SKILL_MANIFEST_TEMPLATE = {
     "tags": [],
 }
 
+# These are the core skills currently shipped in app/skills.
 IMMUTABLE_SKILLS = {
-    "hvac_triage", "mueve_cancun", "calculator", "datetime_helper",
-    "file_manager", "web_research", "last30days", "skill_builder",
-    "wms_expert", "roi_analyst",
+    "hvac_triage",
+    "mueve_cancun",
+    "last30days",
+    "memory_manager",
+    "skill_builder",
+    "web_research",
 }
 
 
