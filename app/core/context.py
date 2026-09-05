@@ -25,6 +25,30 @@ class AgentContext:
     files: List[str] = field(default_factory=list)
     started_at: datetime = field(default_factory=datetime.utcnow)
 
+    @property
+    def room_number(self) -> Optional[str]:
+        """Return the guest room from durable context state, if present."""
+        return self.state.get("room_number")
+
+    @room_number.setter
+    def room_number(self, value: Optional[str]) -> None:
+        if value is None:
+            self.state.pop("room_number", None)
+        else:
+            self.state["room_number"] = value
+
+    @property
+    def guest_name(self) -> Optional[str]:
+        """Return the guest name from durable context state, if present."""
+        return self.state.get("guest_name")
+
+    @guest_name.setter
+    def guest_name(self, value: Optional[str]) -> None:
+        if value is None:
+            self.state.pop("guest_name", None)
+        else:
+            self.state["guest_name"] = value
+
     def add_message(
         self,
         role: str,
