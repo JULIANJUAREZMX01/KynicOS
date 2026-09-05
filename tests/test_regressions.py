@@ -1,3 +1,4 @@
+from app.agents.concierge_loop import ConciergeAgentLoop
 from app.core.context import AgentContext
 from app.core.skill_engine import IMMUTABLE_SKILLS, _normalize_skill_name, _validate_skill_code
 
@@ -44,3 +45,28 @@ def test_generated_skill_validation_rejects_dangerous_imports():
 def test_skill_name_normalization_is_deterministic():
     assert _normalize_skill_name(" My New Skill ") == "my_new_skill"
     assert _normalize_skill_name("123bad") == ""
+
+
+@pytest.mark.asyncio
+async def test_empty_hvac_diagnostics_do_not_break_ticket_escalation(monkeypatch):
+    loop = ConciergeAgentLoop.__new__(ConciergeAgentLoop)
+    loop.settings = type("SettingsStub", (), {})()
+    captured = {}
+
+    async def fake_send(message):
+        captured["message"] = message
+
+    monkeypatch.setattr(loop, "_send_telegram_alert", fake_send)
+
+    ctx = AgentContext(session_id="s1", user_id="u1", channel="test")
+    ctx.room_number = "1204"
+    ctx.guest_name = "Ana"
+
+    await loop._escalate_maintenance_ticket(
+        ctx,
+        "sin_frio",
+        {"descripcion": "Aire acondicionado sin frío", "diagnostico": []},
+        "alta",
+    )
+
+    assert "Diagnóstico no disponible" in captured["message"]
