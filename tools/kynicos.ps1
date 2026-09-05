@@ -15,7 +15,7 @@ $RepoUrl = 'https://github.com/JULIANJUAREZMX01/KynicOS.git'
 $RepoDir = Join-Path $Workspace 'KynicOS'
 $Stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $EvidenceDir = Join-Path $RepoDir (Join-Path 'evidence' $Stamp)
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.1.0'
 
 New-Item -ItemType Directory -Force -Path $Workspace | Out-Null
 New-Item -ItemType Directory -Force -Path $EvidenceDir | Out-Null
@@ -84,7 +84,7 @@ function Write-Inventory {
         'app/main.py','app/agents/concierge_loop.py','app/core/loop.py','app/core/context.py',
         'app/core/sentinel.py','app/core/skill_engine.py','app/core/tools.py','app/cloud/providers.py',
         'app/cloud/sessions.py','app/skills/skill_builder.py','requirements.txt',
-        'tests/test_tools.py','tests/test_main.py','.github/workflows/test.yml','Cargo.toml'
+        'tests/test_tools.py','tests/test_main.py','tests/test_regressions.py','.github/workflows/test.yml','Cargo.toml'
     )
     $rows = foreach ($item in $items) {
         [ordered]@{ path=$item; exists=(Test-Path (Join-Path $RepoDir $item)) }
@@ -123,7 +123,7 @@ KynicOS independent engineering audit. Inspect only the current checkout. Do not
 KynicOS security review. Inspect current checkout without changing it. Focus on shell=True, subprocess, eval/exec, dynamic imports, generated skill execution, arbitrary file writes, Git operations, network scanning, process/system control, self-repair, overdrive, CORS, secrets, and trust boundaries. Classify each finding by evidence and severity. Distinguish a hardening mechanism from a true sandbox. Do not provide offensive exploitation steps.
 '@
     $verification = @'
-KynicOS verification review. Independently reproduce the audit claims where tools are available. Do not trust prior reports. Run the project's tests and static checks available in the checkout, inspect CI configuration, and state exactly what could not be executed. Verify the 13-point post-merge checklist, especially Concierge diagnostic behavior, room_number/guest_name persistence callers, and stale IMMUTABLE_SKILLS. Return PASS, PASS_WITH_WARNINGS, FAIL, or BLOCKED with evidence.
+KynicOS verification review. Independently reproduce the audit claims where tools are available. Do not trust prior reports. Run the project's tests and static checks available in the checkout, inspect CI configuration, and state exactly what could not be executed. Verify the 13-point post-merge checklist, including the fixed Concierge diagnostic empty-list behavior, durable room_number/guest_name context properties, current IMMUTABLE_SKILLS registry, Sentinel lifecycle, and actual CI/runtime evidence. Return PASS, PASS_WITH_WARNINGS, FAIL, or BLOCKED with evidence.
 '@
     Set-Content (Join-Path $EvidenceDir 'agent-master-audit.txt') $master -Encoding utf8
     Set-Content (Join-Path $EvidenceDir 'agent-security-review.txt') $security -Encoding utf8
@@ -148,19 +148,27 @@ function Detect-Agents {
 }
 
 function Python-Checks {
-    $py = Find-Command 'python'
-    if ($null -eq $py) { $py = Find-Command 'py' }
-    if ($null -eq $py) { Write-Result 'python' 'BLOCKED' 'Python interpreter not found.'; return }
-    Invoke-Captured 'python-version' $py @('--version') | Out-Null
-    if (Test-Path (Join-Path $RepoDir 'app')) { Invoke-Captured 'compileall' $py @('-m','compileall','-q',(Join-Path $RepoDir 'app')) | Out-Null }
-    if (Test-Path (Join-Path $RepoDir 'tests')) { Invoke-Captured 'pytest' $py @('-m','pytest','-q',(Join-Path $RepoDir 'tests')) | Out-Null }
+    $systemPy = Find-Command 'python'
+    if ($null -eq $systemPy) { $systemPy = Find-Command 'py' }
+    if ($null -eq $systemPy) { Write-Result 'python' 'BLOCKED' 'Python interpreter not found.'; return }
+
+    $testPy = $systemPy
     if (-not $NoInstall -and (Test-Path (Join-Path $RepoDir 'requirements.txt'))) {
         $venv = Join-Path $RepoDir '.venv'
-        if (-not (Test-Path $venv)) { Invoke-Captured 'venv-create' $py @('-m','venv',$venv) | Out-Null }
+        if (-not (Test-Path $venv)) { Invoke-Captured 'venv-create' $systemPy @('-m','venv',$venv) | Out-Null }
         $venvPy = Join-Path $venv 'Scripts\python.exe'
-        if (Test-Path $venvPy) { Invoke-Captured 'requirements-install' $venvPy @('-m','pip','install','-r',(Join-Path $RepoDir 'requirements.txt')) | Out-Null }
-        else { Write-Result 'venv-python' 'BLOCKED' 'Windows venv Python executable not found.' }
+        if (Test-Path $venvPy) {
+            Invoke-Captured 'requirements-install' $venvPy @('-m','pip','install','-r',(Join-Path $RepoDir 'requirements.txt')) | Out-Null
+            $testPy = $venvPy
+        } else {
+            Write-Result 'venv-python' 'BLOCKED' 'Windows venv Python executable not found; falling back to system Python.'
+        }
     }
+
+    Invoke-Captured 'python-version' $testPy @('--version') | Out-Null
+    if (Test-Path (Join-Path $RepoDir 'app')) { Invoke-Captured 'compileall' $testPy @('-m','compileall','-q',(Join-Path $RepoDir 'app')) | Out-Null }
+    if (Test-Path (Join-Path $RepoDir 'tests')) { Invoke-Captured 'pytest' $testPy @('-m','pytest','-q',(Join-Path $RepoDir 'tests')) | Out-Null }
+
     $ruff = Find-Command 'ruff'; if ($null -ne $ruff) { Invoke-Captured 'ruff' $ruff @('check',$RepoDir) | Out-Null } else { Write-Result 'ruff' 'PASS-STATIC' 'ruff not installed; check not executed.' }
     $mypy = Find-Command 'mypy'; if ($null -ne $mypy) { Invoke-Captured 'mypy' $mypy @($RepoDir) | Out-Null } else { Write-Result 'mypy' 'PASS-STATIC' 'mypy not installed; check not executed.' }
 }
@@ -205,22 +213,22 @@ function Runtime-Check {
 
 function Write-Checklist {
     $checklist = @(
-        [ordered]@{id=1; item='Sentinel/settings contract'; status='static verification required'},
-        [ordered]@{id=2; item='send_alert availability'; status='static verification required'},
-        [ordered]@{id=3; item='AgentContext.add_file'; status='static verification required'},
-        [ordered]@{id=4; item='state/files/timestamps/metadata persistence'; status='static verification required'},
-        [ordered]@{id=5; item='Windows temp/ZIP handling'; status='static verification required'},
-        [ordered]@{id=6; item='Telegram /start text'; status='static verification required'},
-        [ordered]@{id=7; item='Telegram self-import'; status='static verification required'},
-        [ordered]@{id=8; item='Concierge diagnostic empty-list behavior'; status='PENDING_CALLER_AUDIT'},
-        [ordered]@{id=9; item='room_number/guest_name persistence callers'; status='PARTIAL_CALLER_AUDIT'},
-        [ordered]@{id=10; item='DANGEROUS_IMPORTS enforcement'; status='static verification required'},
-        [ordered]@{id=11; item='IMMUTABLE_SKILLS stale names'; status='PENDING_CLEANUP'},
-        [ordered]@{id=12; item='Telegram optional startup/failure cleanup'; status='static verification required'},
+        [ordered]@{id=1; item='Sentinel/settings contract'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=2; item='send_alert availability'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=3; item='AgentContext.add_file'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=4; item='state/files/timestamps/metadata persistence'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=5; item='Windows temp/ZIP handling'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=6; item='Telegram /start text'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=7; item='Telegram self-import'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=8; item='Concierge diagnostic empty-list behavior'; status='STATIC_FIXED_REGRESSION_TEST_PENDING'},
+        [ordered]@{id=9; item='room_number/guest_name persistence callers'; status='STATIC_CONTEXT_FIXED_CALLER_AUDIT_PENDING'},
+        [ordered]@{id=10; item='DANGEROUS_IMPORTS enforcement'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=11; item='IMMUTABLE_SKILLS stale names'; status='STATIC_FIXED_RUNTIME_PENDING'},
+        [ordered]@{id=12; item='Telegram optional startup/failure cleanup'; status='STATIC_FIXED_RUNTIME_PENDING'},
         [ordered]@{id=13; item='CI/test execution'; status='RUNTIME_OR_CI_EVIDENCE_REQUIRED'}
     )
     $checklist | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $EvidenceDir 'post-merge-13-point-checklist.json') -Encoding utf8
-    Write-Result '13-point-checklist' 'PASS-STATIC' 'Checklist written with known pending items preserved instead of silently marked fixed.'
+    Write-Result '13-point-checklist' 'PASS-STATIC' 'Checklist reflects current static fixes while retaining runtime/CI evidence requirements.'
 }
 
 function Main {
