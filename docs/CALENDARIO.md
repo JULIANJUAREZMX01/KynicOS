@@ -26,3 +26,10 @@
 - Verificado en 3 escenarios: 16 GB → qwen2.5:7b; 24 GB VRAM → qwen2.5:32b; 8 GB → qwen2.5:3b
 - Hallazgo: el bot @b44_6221857b05e8870c_bot es válido pero su webhook apunta a una app inexistente (huérfano)
 - Pendiente de decisión: liberar ese webhook o crear bot nuevo en BotFather para el nodo
+
+## 3 nov 2026 (noche) — bot definitivo @kynicOS_robot (ADR-023)
+- Bot propio desde BotFather: id 9197997173, @kynicOS_robot, sin webhook (polling disponible)
+- Perfil configurado: descripcion, descripcion corta y comandos /estado /modelo /reiniciar /ayuda
+- CLI ampliado: kynikos telegram --configurar y alias TELEGRAM_BOT_TOKEN
+- Token reenviado _5 invalido (Not Found); el operativo es _4: descartar el duplicado
+- Pendiente del jefe: pulsar /start en t.me/kynicOS_robot y arrancar el nodo en la PC

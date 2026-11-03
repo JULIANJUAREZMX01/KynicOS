@@ -413,7 +413,10 @@ def cmd_init(args) -> int:
 
 def cmd_telegram(args) -> int:
     valores = leer_env()
-    token = args.token or os.environ.get("TELEGRAM_TOKEN") or valores.get("TELEGRAM_TOKEN", "")
+    token = (args.token
+             or os.environ.get("TELEGRAM_TOKEN")
+             or os.environ.get("TELEGRAM_BOT_TOKEN")      # alias de la plataforma
+             or valores.get("TELEGRAM_TOKEN", ""))
     if not token:
         print("Sin token. Usa `kynikos init` o la variable TELEGRAM_TOKEN.")
         return 2
@@ -436,6 +439,10 @@ def cmd_telegram(args) -> int:
             resultado = leer_json_url(base + "/deleteWebhook?drop_pending_updates=false")
             print("Webhook eliminado." if resultado.get("ok") else f"Fallo: {resultado}")
 
+    if args.configurar:
+        hechos = configurar_bot(base)
+        print("Perfil del bot: " + ", ".join(f"{k}={'ok' if v else 'falló'}" for k, v in hechos.items()))
+
     if args.webhook:
         url_destino = f"{args.webhook.rstrip('/')}/api/telegram"
         resultado = leer_json_url(base + "/setWebhook?url=" + urllib.parse.quote(url_destino, safe=""))
@@ -455,6 +462,36 @@ def cmd_telegram(args) -> int:
         print("Webhook    ninguno (modo polling disponible)")
     print(f"Pendientes {webhook.get('pending_update_count', 0)}")
     return 0
+
+
+def configurar_bot(base: str, nombre: str = "KYNIKOS") -> dict:
+    """Deja el bot presentable: descripción, descripción corta y comandos.
+
+    Idempotente: se puede repetir sin efectos secundarios. No envía mensajes.
+    """
+    descripcion = (f"{nombre} · nodo primario de Julián Juárez. Seguridad, infraestructura y "
+                   "automatización. Corre en hardware propio con modelo local: sin techo de tokens.")
+    comandos = [
+        {"command": "estado", "description": "salud del nodo y modelo activo"},
+        {"command": "modelo", "description": "qué modelo está corriendo"},
+        {"command": "reiniciar", "description": "limpia el contexto de la conversación"},
+        {"command": "ayuda", "description": "qué sabe hacer y qué no"},
+    ]
+    resultados = {}
+    resultados["descripcion"] = leer_json_url(
+        base + "/setMyDescription?description=" + urllib.parse.quote(descripcion, safe="")).get("ok", False)
+    resultados["descripcion_corta"] = leer_json_url(
+        base + "/setMyShortDescription?short_description="
+        + urllib.parse.quote("Perro guardián técnico. Nodo propio, modelo local.", safe="")).get("ok", False)
+    cuerpo = json.dumps({"commands": comandos}).encode()
+    try:
+        peticion = urllib.request.Request(base + "/setMyCommands", data=cuerpo,
+                                         headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(peticion, timeout=10) as r:
+            resultados["comandos"] = json.loads(r.read().decode()).get("ok", False)
+    except Exception:
+        resultados["comandos"] = False
+    return resultados
 
 
 def cmd_install(args) -> int:
@@ -617,6 +654,8 @@ def main() -> int:
     parser.add_argument("--webhook", help="URL pública para registrar el webhook")
     parser.add_argument("--liberar", action="store_true", help="eliminar webhook existente")
     parser.add_argument("--si", action="store_true", help="confirmar acciones del instalador")
+    parser.add_argument("--configurar", action="store_true",
+                        help="deja descripción y comandos del bot listos")
     parser.add_argument("--cambiar", nargs="*", help="clave=valor para config")
     args = parser.parse_args()
     return COMANDOS[args.comando](args)
