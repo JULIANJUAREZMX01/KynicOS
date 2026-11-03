@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "nota": "Servidores MCP que el nodo KYNIKOS puede consumir. Las llaves viven en .env, nunca aquí.",
+  "servidores": [
+    { "nombre": "context7", "tipo": "documentacion", "url": "https://mcp.context7.com/mcp",
+      "variable_llave": "CONTEXT7_API_KEY", "uso": "documentacion actualizada de librerias" },
+    { "nombre": "busqueda-web", "tipo": "interno", "herramienta": "buscar_web",
+      "uso": "busqueda sin API key, dentro del propio nodo" },
+    { "nombre": "archivos", "tipo": "interno", "herramienta": "leer_archivo",
+      "uso": "lectura acotada al workspace" },
+    { "nombre": "sistema", "tipo": "interno", "herramienta": "ejecutar_comando",
+      "uso": "comandos locales con el ejecutor endurecido (shell=False)" },
+    { "nombre": "memoria", "tipo": "interno", "herramienta": "read_nanobot_memory",
+      "uso": "contexto persistente del nodo" }
+  ]
+}

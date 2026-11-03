@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KYNIKOS · consola</title>
+<meta name="theme-color" content="#0b0f0e">
+<link rel="manifest" href="./manifest.webmanifest">
+<style>
+  :root { --bg:#0b0f0e; --panel:#111817; --line:#1d2a27; --text:#e6efec; --dim:#8fa39d; --accent:#c9a227; --ok:#3fb27f; --bad:#d9534f; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  header { padding:14px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  header b { color:var(--accent); letter-spacing:.5px; }
+  .pill { font-size:12px; padding:2px 8px; border:1px solid var(--line); border-radius:999px; color:var(--dim); }
+  .pill.on { color:var(--ok); border-color:#1f4a3a; }
+  .pill.off { color:var(--bad); border-color:#4a2020; }
+  main { max-width:820px; margin:0 auto; padding:16px; }
+  #log { display:flex; flex-direction:column; gap:10px; min-height:40vh; margin-bottom:14px; }
+  .msg { padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--panel); white-space:pre-wrap; word-break:break-word; }
+  .msg.user { border-color:#2b3a36; align-self:flex-end; background:#16201e; max-width:85%; }
+  .msg.bot { border-left:3px solid var(--accent); max-width:92%; }
+  .msg.sys { color:var(--dim); font-size:13px; border-style:dashed; }
+  form { display:flex; gap:8px; }
+  textarea { flex:1; resize:none; min-height:52px; padding:10px; border-radius:10px; background:var(--panel); color:var(--text); border:1px solid var(--line); font:inherit; }
+  button { padding:10px 16px; border-radius:10px; border:1px solid var(--line); background:#1a2624; color:var(--text); font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  section { margin-top:22px; border-top:1px solid var(--line); padding-top:14px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--dim); margin:0 0 10px; }
+  input[type=search] { width:100%; padding:10px; border-radius:10px; background:var(--panel); color:var(--text); border:1px solid var(--line); font:inherit; margin-bottom:10px; }
+  .hit { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; background:var(--panel); font-size:13px; }
+  .hit b { color:var(--accent); }
+  #cfg { display:grid; gap:8px; grid-template-columns:1fr; }
+  #cfg input { padding:8px; border-radius:8px; background:var(--panel); color:var(--text); border:1px solid var(--line); font:inherit; }
+  small { color:var(--dim); }
+</style>
+</head>
+<body>
+<header>
+  <b>KYNIKOS</b>
+  <span class="pill" id="estadoNodo">nodo: sin revisar</span>
+  <span class="pill" id="estadoWasm">wasm: comprobando</span>
+  <span class="pill" id="estadoOffline">red: online</span>
+</header>
+
+<main>
+  <div id="log">
+    <div class="msg sys">Consola del nodo primario. Si el equipo está encendido y el bot corriendo, responde con el modelo local. El histórico vive en este navegador.</div>
+  </div>
+
+  <form id="form">
+    <textarea id="texto" placeholder="Escribe al jefe KYNIKOS… (Enter envía, Shift+Enter salto de línea)"></textarea>
+    <button id="enviar" type="submit">Enviar</button>
+  </form>
+  <small>Se guarda en IndexedDB. Nada de esto viaja a terceros salvo tu propio nodo.</small>
+
+  <section>
+    <h2>Búsqueda local</h2>
+    <input type="search" id="busqueda" placeholder="Buscar en el histórico… (WASM si está compilado)">
+    <div id="resultados"></div>
+  </section>
+
+  <section>
+    <h2>Nodo</h2>
+    <div id="cfg">
+      <input id="urlNodo" placeholder="URL del nodo, ej. http://192.168.1.10:8000">
+      <button id="guardar" type="button">Guardar y comprobar</button>
+    </div>
+    <small>El nodo es tu PC con Ollama. Sin ella encendida, la consola queda en modo local.</small>
+  </section>
+</main>
+
+<script type="module">
+// ---------- almacenamiento local (IndexedDB, sin dependencias) ----------
+const DB = 'kynikos', STORE = 'mensajes';
+let db;
+function abrir() {
+  return new Promise((ok, mal) => {
+    const r = indexedDB.open(DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => mal(r.error);
+  });
+}
+async function guardar(msg) {
+  db = db || await abrir();
+  return new Promise((ok) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).add(msg);
+    tx.oncomplete = ok;
+  });
+}
+async function todos() {
+  db = db || await abrir();
+  return new Promise((ok) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll();
+    req.onsuccess = () => ok(req.result || []);
+  });
+}
+
+// ---------- búsqueda: WASM con respaldo JS ----------
+let buscarWasm = null;
+const log = document.getElementById('log');
+const estadoWasm = document.getElementById('estadoWasm');
+
+function pintar(rol, texto) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + rol;
+  div.textContent = texto;
+  log.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return div;
+}
+
+try {
+  const mod = await import('./pkg/wasm_busqueda.js');
+  await mod.default();
+  buscarWasm = (consulta, docs, limite) => mod.buscar(consulta, docs, limite);
+  estadoWasm.textContent = 'wasm: activo';
+  estadoWasm.classList.add('on');
+} catch {
+  estadoWasm.textContent = 'wasm: respaldo JS';
+  estadoWasm.classList.add('off');
+  buscarWasm = (consulta, docs, limite) => {
+    const terminos = consulta.toLowerCase().split(/\s+/).filter(Boolean);
+    return docs.map((d, i) => {
+      const t = d.toLowerCase();
+      let p = 0;
+      for (const x of terminos) p += (t.split(x).length - 1) * 3;
+      return [i, p];
+    }).filter(([, p]) => p > 0).sort((a, b) => b[1] - a[1]).slice(0, limite).map(([i]) => i);
+  };
+}
+
+// ---------- red ----------
+function estadoRed() {
+  const p = document.getElementById('estadoOffline');
+  p.textContent = navigator.onLine ? 'red: online' : 'red: offline';
+  p.classList.toggle('on', navigator.onLine);
+  p.classList.toggle('off', !navigator.onLine);
+}
+addEventListener('online', estadoRed);
+addEventListener('offline', estadoRed);
+estadoRed();
+
+// ---------- nodo ----------
+const urlInput = document.getElementById('urlNodo');
+const estadoNodo = document.getElementById('estadoNodo');
+urlInput.value = localStorage.getItem('kynikos_url') || '';
+async function comprobarNodo() {
+  const base = (localStorage.getItem('kynikos_url') || '').replace(/\/$/, '');
+  if (!base) { estadoNodo.textContent = 'nodo: sin configurar'; estadoNodo.className = 'pill'; return; }
+  try {
+    const r = await fetch(base + '/api/telegram/salud', { signal: AbortSignal.timeout(4000) });
+    const d = await r.json();
+    estadoNodo.textContent = 'nodo: ' + (d.persona || 'activo');
+    estadoNodo.className = 'pill on';
+  } catch {
+    estadoNodo.textContent = 'nodo: inalcanzable';
+    estadoNodo.className = 'pill off';
+  }
+}
+document.getElementById('guardar').onclick = () => {
+  localStorage.setItem('kynikos_url', urlInput.value.trim());
+  comprobarNodo();
+};
+
+// ---------- conversación ----------
+const form = document.getElementById('form');
+const texto = document.getElementById('texto');
+const enviar = document.getElementById('enviar');
+
+form.onsubmit = async (ev) => {
+  ev.preventDefault();
+  const contenido = texto.value.trim();
+  if (!contenido) return;
+  texto.value = '';
+  pintar('user', contenido);
+  await guardar({ rol: 'user', texto: contenido, fecha: Date.now() });
+
+  const base = (localStorage.getItem('kynikos_url') || '').replace(/\/$/, '');
+  if (!base) {
+    pintar('sys', 'Sin nodo configurado: el mensaje quedó guardado y se responderá cuando conectes tu equipo.');
+    return;
+  }
+  enviar.disabled = true;
+  const esperando = pintar('sys', 'pensando en el nodo…');
+  try {
+    const r = await fetch(base + '/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensaje: contenido }),
+      signal: AbortSignal.timeout(120000),
+    });
+    const d = await r.json();
+    esperando.remove();
+    const respuesta = d.respuesta || d.content || d.error || '(sin respuesta)';
+    pintar('bot', respuesta);
+    await guardar({ rol: 'assistant', texto: respuesta, fecha: Date.now() });
+  } catch (e) {
+    esperando.remove();
+    pintar('sys', 'No se pudo alcanzar el nodo (' + e.name + '). Revisa que tu equipo esté encendido y la URL correcta.');
+  } finally {
+    enviar.disabled = false;
+  }
+};
+
+texto.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+});
+
+// ---------- búsqueda ----------
+const entrada = document.getElementById('busqueda');
+const resultados = document.getElementById('resultados');
+entrada.addEventListener('input', async () => {
+  const q = entrada.value.trim();
+  resultados.innerHTML = '';
+  if (q.length < 2) return;
+  const items = await todos();
+  const textos = items.map((m) => m.rol + ': ' + m.texto);
+  const indices = buscarWasm(q, textos, 8);
+  if (!indices.length) { resultados.innerHTML = '<div class="hit">Sin coincidencias en el histórico local.</div>'; return; }
+  for (const i of indices) {
+    const m = items[i];
+    const div = document.createElement('div');
+    div.className = 'hit';
+    div.innerHTML = '<b>' + (m.rol === 'user' ? 'jefe' : 'kynikos') + '</b> · ' +
+      new Date(m.fecha).toLocaleString('es-MX') + '<br>' + m.texto.slice(0, 220).replace(/</g, '&lt;');
+    resultados.appendChild(div);
+  }
+});
+
+// ---------- arranque ----------
+const previos = await todos();
+for (const m of previos.slice(-20)) pintar(m.rol === 'user' ? 'user' : 'bot', m.texto);
+comprobarNodo();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

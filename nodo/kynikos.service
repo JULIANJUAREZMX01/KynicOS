@@ -1,0 +1,16 @@
+[Unit]
+Description=KYNIKOS nodo primario (bot propio)
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=REEMPLAZA_TU_USUARIO
+WorkingDirectory=REEMPLAZA_RUTA/KynicOS
+EnvironmentFile=REEMPLAZA_RUTA/KynicOS/.env
+ExecStart=REEMPLAZA_RUTA/KynicOS/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -65,3 +65,40 @@ Escribe al bot desde Telegram. Si responde con el saludo de KYNIKOS, quedó enla
 - `TELEGRAM_TOKEN` y `TELEGRAM_WEBHOOK_SECRET` solo en variables de entorno o en la bóveda, nunca en el repo.
 - El bot solo atiende al usuario `8247886073`; cualquier otro remitente se ignora.
 - Si el bot deja de responder, revisa `/api/telegram/salud`: dice qué falta sin exponer nada.
+
+## Camino C — Nodo propio en tu PC (recomendado, tokens ilimitados)
+
+Este es el camino de ADR-021: el cerebro vive en tu equipo, la web es solo la ventana.
+
+```bash
+# 1. En la PC elegida (la de más RAM):
+git clone https://github.com/JULIANJUAREZMX01/KynicOS.git && cd KynicOS
+bash nodo/instalar.sh          # instala Ollama, venv y deja .env plantilla
+nano .env                      # pega TELEGRAM_TOKEN (BotFather)
+
+# 2. Arrancar
+set -a && source .env && set +a
+.venv/bin/python -m app.main
+
+# 3. Opcional: que arranque solo al encender el equipo
+sudo cp nodo/kynikos.service /etc/systemd/system/
+sudo sed -i "s|REEMPLAZA_RUTA|$PWD|g; s|REEMPLAZA_TU_USUARIO|$USER|g" /etc/systemd/system/kynikos.service
+sudo systemctl enable --now kynikos
+```
+
+La consola web (`web/index.html`) se publica sin costo desde el mismo repositorio y se apunta al nodo con su URL local.
+
+### WASM de búsqueda
+
+```bash
+cargo install wasm-pack
+cd wasm-busqueda && wasm-pack build --target web --release --out-dir ../web/pkg
+```
+
+Sin ese paso la consola usa el respaldo JavaScript y funciona igual.
+
+### Qué consume créditos y qué no
+
+- Hablar con el nodo local: **cero** créditos de Base44, solo tu electricidad.
+- Pedirme a mí análisis, deploys o investigación: **créditos de Base44**.
+- Regla práctica: lo cotidiano al nodo, lo complejo a Base44.

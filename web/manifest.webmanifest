@@ -1,0 +1,13 @@
+{
+  "name": "KYNIKOS · consola",
+  "short_name": "KYNIKOS",
+  "description": "Consola del nodo primario KYNIKOS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0f0e",
+  "theme_color": "#0b0f0e",
+  "icons": [
+    { "src": "../unt-logo-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "../unt-logo.webp", "sizes": "512x512", "type": "image/webp" }
+  ]
+}
