@@ -1,0 +1,10 @@
+# Dependencias mínimas para el canal webhook en serverless (Vercel)
+fastapi>=0.115
+httpx>=0.27
+pydantic-settings>=2.4
+python-dotenv>=1.0
+tenacity>=9.0          # requerido por app/cloud/providers.py
+# Proveedores: instala solo el que uses
+# groq>=0.9
+# anthropic>=0.40
+loguru>=0.7          # requerido por app/utils/logger.py

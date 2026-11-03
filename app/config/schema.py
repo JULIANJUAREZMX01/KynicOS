@@ -7,7 +7,7 @@ from typing import Optional
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    persona: str = "leo"
+    persona: str = "kynicos"
 
     hotel_name: str = "Hotel Cancún"
     hotel_location: str = "Cancún, México"
@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # ── Local LLM ─────────────────────────────────────────────
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.2"
+    telegram_webhook_secret: str = ""  # valida el webhook de Telegram en serverless
+    public_base_url: str = ""  # URL publica, necesaria para registrar el webhook
 
     twilio_account_sid: Optional[str] = None
     twilio_auth_token: Optional[str] = None
