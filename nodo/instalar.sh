@@ -13,7 +13,7 @@ if ! command -v ollama >/dev/null; then
   curl -fsSL https://ollama.com/install.sh | sh
 fi
 
-MODELO="${KYNIKOS_MODELO:-qwen2.5:7b}"
+MODELO="${KYNIKOS_MODELO:-qwen2.5:7b}"   # óptimo para 16 GB de RAM sin GPU dedicada
 echo "-- descargando modelo $MODELO (una sola vez)"
 ollama pull "$MODELO" || true
 
@@ -30,6 +30,9 @@ TELEGRAM_USER_ID=8247886073
 PERSONA=kynikos
 OLLAMA_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_NUM_CTX=4096
+MAX_TOKENS_SALIDA=768
+TIMEOUT_LLM=300
 ENV
   echo "!! Edita .env y pon el TELEGRAM_TOKEN antes de arrancar"
 fi

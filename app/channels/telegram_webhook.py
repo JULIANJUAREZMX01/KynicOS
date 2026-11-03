@@ -81,7 +81,7 @@ async def procesar(chat_id: int, texto: str) -> None:
         mensajes = [{"role": "system", "content": persona.system_prompt}] + historial[-MAX_TURNOS:]
 
         manager = ProviderManager(s)
-        resultado = await manager.call(mensajes, max_tokens=2048, temperature=0.6)
+        resultado = await manager.call(mensajes, max_tokens=getattr(s, "max_tokens_salida", 768), temperature=0.6)
         contenido = (resultado or {}).get("content") or "Sin respuesta del modelo."
         historial.append({"role": "assistant", "content": contenido})
         await enviar_mensaje(chat_id, contenido)

@@ -67,9 +67,11 @@ class AnthropicProvider:
 class OllamaProvider:
     """Local Ollama provider; no cloud credentials required."""
 
-    def __init__(self, base_url: str, model: str):
+    def __init__(self, base_url: str, model: str, num_ctx: int = 4096, timeout: float = 300.0):
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.num_ctx = num_ctx
+        self.timeout = timeout
         self.name = "ollama"
 
     async def call(self, messages: List[Dict[str, str]], max_tokens: int = 8192, temperature: float = 0.7) -> Dict[str, Any]:
@@ -77,9 +79,9 @@ class OllamaProvider:
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": temperature, "num_predict": max_tokens},
+            "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": self.num_ctx},
         }
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             data = response.json()
@@ -110,7 +112,7 @@ class ProviderManager:
             except Exception as e:
                 logger.warning(f"Failed to initialize Anthropic: {e}")
 
-        self.providers.append(OllamaProvider(self.settings.ollama_url, self.settings.ollama_model))
+        self.providers.append(OllamaProvider(self.settings.ollama_url, self.settings.ollama_model, getattr(self.settings, "ollama_num_ctx", 4096), getattr(self.settings, "timeout_llm", 300.0)))
         logger.info("✅ Ollama local provider configured as final fallback")
 
     def get_provider(self):

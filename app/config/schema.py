@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # ── Local LLM ─────────────────────────────────────────────
     ollama_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "llama3.2"
+    ollama_num_ctx: int = 4096   # ventana de contexto acotada: menos RAM en KV cache
+    max_tokens_salida: int = 768  # calibrado para ~5 tok/s (Ryzen 5 5500U)
+    timeout_llm: float = 300.0    # segundos; un modelo local lento necesita margen
     telegram_webhook_secret: str = ""  # valida el webhook de Telegram en serverless
     public_base_url: str = ""  # URL publica, necesaria para registrar el webhook
 
