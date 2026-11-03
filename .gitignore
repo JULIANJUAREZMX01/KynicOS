@@ -1,14 +1,19 @@
-.env
-__pycache__/
-*.pyc
-*.pyo
-.DS_Store
-workspace/
-data/
-*.log
-.pytest_cache/
-dist/
-build/
-*.egg-info/
+# Entornos virtuales
 .venv/
+.vb/
 venv/
+env/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+*.log
+# Datos locales
+data/
+backups/
