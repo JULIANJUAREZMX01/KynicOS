@@ -19,3 +19,10 @@
 - Techo: 14B Q4 cabe (8.9 GB de 11.9 libres); 20B y 32B no caben; con 32 GB sí cabría 32B al límite
 - Ajustado: max_tokens_salida 2048→768, timeout LLM 120→300s, num_ctx 4096 en OllamaProvider
 - PWA: timeout de 120 s a 300 s para no cortar respuestas de modelo local
+
+## 3 nov 2026 (noche) — CLI de instalación configurable (ADR-022)
+- Nuevo cli/kynikos.py: doctor, plan, init, telegram, install, run, status, models, config, service
+- Planificador con criterio medible: solo modelos >=4 tok/s; desempate por calidad en español
+- Verificado en 3 escenarios: 16 GB → qwen2.5:7b; 24 GB VRAM → qwen2.5:32b; 8 GB → qwen2.5:3b
+- Hallazgo: el bot @b44_6221857b05e8870c_bot es válido pero su webhook apunta a una app inexistente (huérfano)
+- Pendiente de decisión: liberar ese webhook o crear bot nuevo en BotFather para el nodo
