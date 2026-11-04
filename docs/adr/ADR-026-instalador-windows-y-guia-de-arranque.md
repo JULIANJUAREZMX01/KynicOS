@@ -55,3 +55,12 @@ Al fotografiar la pantalla se vio que la tarea programada se había registrado y
 - **Causa:** la guía daba el bloque de registro como paso suelto, sin exigir que el entorno existiera. `Ready` en el Programador de Tareas solo significa «registrada», no «ejecutándose».
 - **Corrección:** `nodo/registrar-tarea.ps1` se niega a registrar sin `.venv` y `.env`, añade reintentos automáticos, y **verifica que el proceso esté vivo** tras 8 segundos en lugar de fiarse del estado de la tarea.
 - **Lección:** una confirmación de la plataforma («Ready», «200 OK», «Registered») no es evidencia de que el servicio funcione. La evidencia es el comportamiento: aquí, que Telegram deje de acumular mensajes.
+
+## Tercera corrección: el flujo se reduce a copiar, pegar y validar
+
+Con dos fallos ya acumulados (éxito falso del instalador y tarea `Ready` que no corría), quedó claro que el problema no era cada error por separado sino el diseño: pasos sueltos que el usuario debía ordenar y juzgar por su cuenta.
+
+- **Decisión:** un script único, `nodo/arrancar-y-validar.ps1`, que limpia tareas viejas, actualiza el repositorio, comprueba requisitos, instala si falta, arranca en segundo plano y **valida de verdad**.
+- **Cómo valida:** consulta `getUpdates` de Telegram y espera el error **409**, que solo aparece si el nodo ya está ocupando el canal. Un `Ready`, un proceso con PID o un log sin errores no prueban nada; el 409 sí, porque implica que alguien está escuchando.
+- **Detalle de robustez:** `git` escribe su progreso por stderr, y con `$ErrorActionPreference = "Stop"` eso aborta el script. Se relaja esa preferencia solo durante la llamada a `git`.
+- **Consecuencia:** la guía bajó de nueve pasos a tres bloques, y el usuario ya no tiene que interpretar estados ambiguos de Windows. Si algo falla, el script nombra la causa.

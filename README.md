@@ -14,16 +14,22 @@ KynicOS is a unified AI operations platform designed for hospitality environment
 
 ## 🚀 Arranque en Windows (nodo primario)
 
-Un solo bloque, sin administrador y sin costo:
+Tres bloques, con validación automática al final. Sin administrador y sin costo.
 
 ```powershell
+# 1. traer el repositorio
 cd $HOME\Documents
 git clone https://github.com/JULIANJUAREZMX01/KynicOS.git
 cd KynicOS
-.\nodo\arranque-todo-en-uno.ps1
+
+# 2. instalar, arrancar y validar contra Telegram
+Set-ExecutionPolicy -Scope Process -Bypass -Force
+.\nodo\arrancar-y-validar.ps1
 ```
 
-Guía explicativa paso a paso, con problemas comunes y su arreglo: [`docs/GUIA-ARRANQUE-WINDOWS.md`](docs/GUIA-ARRANQUE-WINDOWS.md)
+El paso 2 termina con `VALIDADO: el nodo está escuchando a Telegram`, comprobado contra la API, no contra el estado de Windows.
+
+Guía completa: [`docs/GUIA-ARRANQUE-WINDOWS.md`](docs/GUIA-ARRANQUE-WINDOWS.md)
 
 ## 🔗 Quick Links
 

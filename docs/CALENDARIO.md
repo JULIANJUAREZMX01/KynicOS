@@ -46,3 +46,8 @@
 - `nodo/arranque-todo-en-uno.ps1`: bloque único de cinco pasos con verificación de configuración
 - `docs/GUIA-ARRANQUE-WINDOWS.md`: pasos, tabla de configuración y problemas comunes
 - Pendiente real: ejecutarlo en la PC para confirmar el arranque (aquí no hay PowerShell)
+
+## 3 nov 2026 (noche, cierre) — arranque validado por comportamiento
+- `nodo/arrancar-y-validar.ps1`: limpia tarea vieja, actualiza, instala, arranca y valida con el error 409 de Telegram
+- Guía reducida a tres bloques con validación explícita; página `kynikos.html` reescrita al mismo flujo
+- Pendiente: que Julián ejecute el bloque 2 en la PC (aquí no hay PowerShell)
