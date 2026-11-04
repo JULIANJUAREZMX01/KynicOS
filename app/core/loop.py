@@ -9,6 +9,7 @@ from app.config import Settings
 from app.utils import get_logger
 from app.core.context import AgentContext, Message
 from app.core.tools import ToolExecutor
+from app.core import window
 from app.cloud.providers import ProviderManager
 
 logger = get_logger(__name__)
@@ -68,15 +69,35 @@ class AgentLoop:
             return error_msg
 
     def _format_messages(self, ctx: AgentContext) -> List[Dict[str, str]]:
-        """Format context messages for LLM API"""
+        """Format context messages for LLM API
+
+        El historial se recorta segun el proveedor. Ollama corre en la maquina
+        con 4096 tokens de contexto: mandarle 20 mensajes lo satura y la
+        llamada muere con "Error processing message". En la nube cabe mas, asi
+        que recortar siempre empeoraria las respuestas sin necesidad.
+        """
         formatted = []
 
         # Add system prompt
         system_prompt = self._build_system_prompt(ctx)
         formatted.append({"role": "system", "content": system_prompt})
 
-        # Add conversation history
-        for msg in ctx.messages:
+        # Cuantos mensajes caben segun quien responda
+        try:
+            proveedor = self.provider_manager.get_provider().__class__.__name__
+        except Exception:
+            proveedor = ""
+        limite = window.limite_historial(proveedor)
+
+        # Add conversation history, con ventana deslizante
+        historial, fuera = window.recortar(ctx.messages, limite)
+        if fuera:
+            logger.info(
+                f"Historial recortado para {proveedor or 'proveedor desconocido'}: "
+                f"{fuera} mensajes fuera, se envian {len(historial)}"
+            )
+
+        for msg in historial:
             formatted.append({"role": msg.role, "content": msg.content})
 
         return formatted
