@@ -145,17 +145,28 @@ async def root():
 
 @app.get("/api/status")
 async def status():
+    """Estado real, no un saludo.
+
+    Antes devolvia "ok" escrito a mano: respondia 200 con el agente caido y sin
+    token, que es justo lo que hacia imposible diagnosticar el nodo. Ahora "ok"
+    exige bucle construido y canal de Telegram cargado; si falta algo dice
+    "degradado" y expone que falta.
+    """
     persona_name = os.getenv("PERSONA", Settings().persona)
     settings = Settings()
+    token = bool(getattr(settings, "telegram_token", ""))
+    loop_vivo = _agent_loop is not None
     return JSONResponse({
-        "status": "ok",
+        "status": "ok" if (loop_vivo and token) else "degradado",
         "version": "1.0.0",
+        "pid": os.getpid(),
         "persona": persona_name,
-        "agent_loop": _agent_loop is not None,
+        "agent_loop": loop_vivo,
+        "telegram_token": token,
         "llm": "groq → anthropic → ollama",
         "channels": [
             channel for channel, enabled in (
-                ("telegram", bool(settings.telegram_token)),
+                ("telegram", token),
                 ("whatsapp", True),
             ) if enabled
         ],
