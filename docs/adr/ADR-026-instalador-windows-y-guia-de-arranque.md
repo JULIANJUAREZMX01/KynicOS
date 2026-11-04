@@ -64,3 +64,11 @@ Con dos fallos ya acumulados (éxito falso del instalador y tarea `Ready` que no
 - **Cómo valida:** consulta `getUpdates` de Telegram y espera el error **409**, que solo aparece si el nodo ya está ocupando el canal. Un `Ready`, un proceso con PID o un log sin errores no prueban nada; el 409 sí, porque implica que alguien está escuchando.
 - **Detalle de robustez:** `git` escribe su progreso por stderr, y con `$ErrorActionPreference = "Stop"` eso aborta el script. Se relaja esa preferencia solo durante la llamada a `git`.
 - **Consecuencia:** la guía bajó de nueve pasos a tres bloques, y el usuario ya no tiene que interpretar estados ambiguos de Windows. Si algo falla, el script nombra la causa.
+
+## Cuarta corrección: `-Bypass` no existe
+
+La guía indicaba `Set-ExecutionPolicy -Scope Process -Bypass -Force`. Ese parámetro no existe en PowerShell: el correcto es `-ExecutionPolicy Bypass`, y el primer intento de Julián falló con `NamedParameterNotFound`.
+
+- **Decisión:** la vía principal pasa a ser `powershell -ExecutionPolicy Bypass -File ".\\nodo\\arrancar-y-validar.ps1"`, que habilita scripts solo para ese proceso y no toca la configuración del equipo.
+- **En los scripts:** el ajuste de política quedó dentro de un `try/catch`, porque si el script ya está corriendo la línea es inútil y antes abortaba.
+- **Lección aplicada:** se verifica cada parámetro de PowerShell contra su documentación antes de publicarlo en una guía.

@@ -66,7 +66,7 @@ if ((Test-Path $python) -and (Test-Path $envFile)) {
     Bien "El entorno ya existe; no hace falta reinstalar."
 } else {
     Info "Instalando. Te pedirá el token del bot (no se ve al pegarlo) y la palabra del primer paso."
-    Set-ExecutionPolicy -Scope Process -Bypass -Force
+    try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop } catch { }
     & (Join-Path $PSScriptRoot "instalar.ps1")
     if ($LASTEXITCODE -ne 0) {
         Mal "La instalación no terminó. Lee el mensaje rojo de arriba."

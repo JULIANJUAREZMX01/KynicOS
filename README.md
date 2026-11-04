@@ -23,7 +23,7 @@ git clone https://github.com/JULIANJUAREZMX01/KynicOS.git
 cd KynicOS
 
 # 2. instalar, arrancar y validar contra Telegram
-Set-ExecutionPolicy -Scope Process -Bypass -Force
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 .\nodo\arrancar-y-validar.ps1
 ```
 

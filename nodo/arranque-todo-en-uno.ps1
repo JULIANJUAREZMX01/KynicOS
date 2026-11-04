@@ -63,7 +63,7 @@ if (-not (Test-Path $instalador)) {
 
 # La política de ejecución se relaja solo para esta ventana, no para el sistema.
 try {
-    Set-ExecutionPolicy -Scope Process -Bypass -Force
+    try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop } catch { }
 } catch {
     Aviso "No se pudo ajustar la política de ejecución; si falla, ejecútalo a mano."
 }

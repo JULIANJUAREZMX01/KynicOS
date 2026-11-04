@@ -32,11 +32,20 @@ cd KynicOS
 
 Este bloque hace seis cosas por su cuenta: borra tareas viejas que estorben, actualiza el repositorio, comprueba requisitos, instala lo que falte, arranca el nodo y **verifica con Telegram que esté escuchando de verdad**.
 
+Un solo comando. No necesita cambiar la política del sistema ni abrir nada más:
+
 ```powershell
-cd $HOME\Documents\KynicOS
-Set-ExecutionPolicy -Scope Process -Bypass -Force
+powershell -ExecutionPolicy Bypass -File "$HOME\Documents\KynicOS\nodo\arrancar-y-validar.ps1"
+```
+
+Si prefieres ejecutarlo desde dentro de la ventana, primero habilita scripts solo para esa sesión:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 .\nodo\arrancar-y-validar.ps1
 ```
+
+El parámetro es `-ExecutionPolicy Bypass`. `-Bypass` a secas no existe y da error.
 
 Te pedirá dos datos. El token **no se muestra al pegarlo**: es normal, pégalo con clic derecho y pulsa Enter.
 
