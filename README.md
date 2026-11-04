@@ -14,7 +14,7 @@ KynicOS is a unified AI operations platform designed for hospitality environment
 
 ## 🚀 Arranque en Windows (nodo primario)
 
-Tres bloques, con validación automática al final. Sin administrador y sin costo.
+Dos bloques y una validación que no miente. Sin administrador y sin costo.
 
 ```powershell
 # 1. traer el repositorio
@@ -22,12 +22,14 @@ cd $HOME\Documents
 git clone https://github.com/JULIANJUAREZMX01/KynicOS.git
 cd KynicOS
 
-# 2. instalar, arrancar y validar contra Telegram
+# 2. arrancar: instala lo que falte, no duplica y valida por API
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-.\nodo\arrancar-y-validar.ps1
+.\nodo\automatico.ps1
 ```
 
-El paso 2 termina con `VALIDADO: el nodo está escuchando a Telegram`, comprobado contra la API, no contra el estado de Windows.
+El paso 2 es idempotente: si el nodo ya está arriba no arranca otra instancia, y si el puerto está ocupado por un duplicado lo libera antes. Termina con `NODO ARRIBA: agente activo y Telegram conectado`, comprobado contra `/api/status` (`agent_loop` y `telegram_token`), no contra el puerto ni contra el estado de Windows.
+
+Para el menú interactivo (estado, logs, configuración, reparación): `.\nodo\CENTRO.ps1`.
 
 Guía completa: [`docs/GUIA-ARRANQUE-WINDOWS.md`](docs/GUIA-ARRANQUE-WINDOWS.md)
 
@@ -594,12 +596,16 @@ Expected response shape:
 {
   "status": "ok",
   "version": "1.0.0",
-  "persona": "leo",
+  "pid": 27660,
+  "persona": "kynikos",
   "agent_loop": true,
+  "telegram_token": true,
   "llm": "groq → anthropic → ollama",
-  "channels": []
+  "channels": ["telegram", "whatsapp"]
 }
 ```
+
+`status` no es una constante. Devuelve `ok` solo cuando `agent_loop` es `true` **y** `telegram_token` es `true`; en cualquier otro caso devuelve `degradado`. Un 200 prueba que el servidor HTTP contestó, no que el agente ni el canal de Telegram funcionen: valida contra esos dos campos, nunca contra el puerto. Decisión registrada en `docs/adr/ADR-030-verificacion-por-api.md`.
 
 The actual channel list depends on configuration.
 
