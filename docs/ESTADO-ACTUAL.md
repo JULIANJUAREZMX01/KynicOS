@@ -1,15 +1,16 @@
-# Estado actual de KynicOS — 3 de noviembre de 2026
+# Estado actual de KynicOS — 3 de noviembre de 2026, 22:50
 
-> Documento de contexto para cualquier persona o agente que retome el proyecto. Las reglas operativas viven en `AGENTS.md`; la memoria compartida, en `docs/agentes/MEMORIA.md`.
+> Documento de contexto para cualquier persona o agente que retome el proyecto. Las reglas operativas viven en `AGENTS.md`; la memoria compartida, en `docs/agentes/MEMORIA.md`; los límites del nodo, en los ADR-021, ADR-027 y ADR-030.
 
 ## 1. Qué está pasando
 
 | Área | Estado | Evidencia |
 | --- | --- | --- |
-| Código | Activo | 8 commits el 3-nov; último `d3d5572` (bot @kynicOS_robot configurable desde el CLI, ADR-023) |
-| Despliegue | Suspendido | Render acumula servicios suspendidos por facturación; el sitio público migra a GitHub Pages según ADR-006 |
-| CI | Rojo | `KynicOS Tests` falló 6 veces consecutivas el 3-nov, entre 21:26 y 22:22 UTC |
-| PRs | Backlog alto | 0 abiertos en este repo; 30 en Kalpixk, 13 en MueveCancun y 8 en KYNYKOS_AI_Agent |
+| Nodo local (Windows) | Estable | PID vivo en el puerto 8000, `/api/status` responde con `agent_loop` y `telegram_token` en `true`; arranca solo con la tarea programada `KYNIKOS nodo` |
+| Código | Activo | PR #5 (`fix/prompt-anti-alucinacion`): 13 archivos, +1500/-8, CI en verde |
+| CI | Verde | `KynicOS Tests` y job `memoria` en verde sobre la rama del PR #5; los 6 fallos consecutivos de la tarde quedaron resueltos |
+| PRs | 1 abierto | #5 en este repo; la regla de un PR por agente se respeta |
+| Despliegue | Suspendido | Render acumula servicios suspendidos por facturación; lo estático migra a GitHub Pages según ADR-006 |
 
 ## 2. Reglas que no se negocian
 
@@ -18,15 +19,34 @@
 3. Máximo **un PR abierto por agente**. Sin merge automático: el humano decide.
 4. `.env.example` documenta cada variable. Los valores reales nunca entran al repositorio.
 5. Nada de secretos en `PUBLIC_*`, `public/` ni historial de git.
+6. **La salud se mide por API, no por puerto.** `agent_loop` y `telegram_token` en `/api/status` deciden; el puerto solo sirve para liberar duplicados (ADR-030).
 
-## 3. Fechas que mandan
+## 3. Cómo se arranca y cómo se valida
+
+Un solo comando, idempotente, sin preguntas:
+
+```powershell
+.\nodo\automatico.ps1
+```
+
+Qué hace, en orden: comprueba el `.venv` de la raíz, instala dependencias si faltan (`requirements.txt` y `requirements-bot.txt`), libera el puerto matando duplicados, arranca `cli\kynikos.py run` con stdout y stderr en archivos distintos, y espera hasta que `/api/status` devuelva `agent_loop=true` y `telegram_token=true`.
+
+Para operar a mano: `.\nodo\CENTRO.ps1` (estado, arrancar, detener, reiniciar, logs, configuración, requisitos, reparar, reporte).
+
+Reglas de convivencia:
+
+- **Una sola instancia.** La dueña es la tarea programada `KYNIKOS nodo`. Arrancar otra a mano produce PIDs peleando el mismo long-poll.
+- **Los scripts se ejecutan como archivo, nunca pegados línea por línea.** Pegados, `$MyInvocation.MyCommand.Definition` viene vacío y el script resuelve su raíz como `C:\Users\<usuario>`, creando entornos donde no van.
+- **PowerShell exige `.\`** para todo lo que esté en la carpeta actual.
+
+## 4. Fechas que mandan
 
 - **11-nov-2026:** Jules pasa a solo lectura. Todo lo que solo viva en su consola o en `.jules/` deja de ser accesible ese día.
 - **31-dic-2026:** Jules se apaga. Lo que no esté documentado se pierde.
 
 Migración detallada: `docs/agentes/MIGRACION-JULES-Y-BUCLE-KYNICOS.md` en el repo de estándares.
 
-## 4. Bucle de entrenamiento (el objetivo de KynicOS)
+## 5. Bucle de entrenamiento (el objetivo de KynicOS)
 
 1. **Ingesta** de `AGENTS.md`, `docs/agentes/MEMORIA.md` y `ROADMAP_AMD.md`.
 2. **Propuesta** en un PR con rama descriptiva.
@@ -37,13 +57,14 @@ Migración detallada: `docs/agentes/MIGRACION-JULES-Y-BUCLE-KYNICOS.md` en el re
 
 Señal de salud: un PR por agente, CI en verde y `MEMORIA.md` creciendo con decisiones, no con transcripciones.
 
-## 5. Qué falta para que el bucle arranque
+## 6. Qué falta
 
-1. Poner `KynicOS Tests` en verde. Sin CI confiable no hay autocorrección posible.
-2. Drenar el backlog de PRs de Kalpixk y MueveCancun.
-3. Cerrar la migración de Jules antes del 11-nov.
-4. Resolver el hosting: Pages para lo estático, y decidir Worker o Render para el bot.
+1. Fusionar el PR #5. Es decisión humana y es el único paso que separa al nodo de la validación honesta.
+2. Conectar `app/core/ecosystem.py` al bucle de herramientas (`app/core/tools.py`), hoy disponible pero desconectado.
+3. Drenar el backlog de PRs de Kalpixk y MueveCancun.
+4. Cerrar la migración de Jules antes del 11-nov.
+5. Resolver el hosting: Pages para lo estático, y decidir Worker o Render para el bot.
 
-## 6. Monitoreo
+## 7. Monitoreo
 
 Cada 6 horas se guardan snapshots verificables (repos, CI, proyectos, correos de claves y accesos) y se entregan como reporte ejecutivo. Lo que no se puede verificar sin credenciales (Render, créditos de AMD) se reporta como limitación, nunca como dato.
