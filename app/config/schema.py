@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     ollama_num_ctx: int = 4096   # ventana de contexto acotada: menos RAM en KV cache
     max_tokens_salida: int = 768  # calibrado para ~5 tok/s (Ryzen 5 5500U)
     timeout_llm: float = 300.0    # segundos; un modelo local lento necesita margen
+    # ── Autenticación local de dos pasos ──────────────────────
+    # El instalador escribe estas dos claves en .env. Sin declararlas aquí,
+    # pydantic-settings lanza extra_forbidden y el nodo no arranca.
+    kynikos_palabra_1: str = ""      # palabra del primer paso
+    kynikos_palabra_2: str = ""      # palabra del segundo paso (opcional)
+    kynikos_estado_dir: str = ".kynikos"  # estado, bloqueos e intentos fallidos
+
     telegram_webhook_secret: str = ""  # valida el webhook de Telegram en serverless
     public_base_url: str = ""  # URL publica, necesaria para registrar el webhook
 

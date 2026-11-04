@@ -14,11 +14,13 @@ from pathlib import Path
 
 from app.config import Settings
 from app.utils import get_logger
+from app.utils.logger import _asegurar_utf8
 from app.cloud.telegram_bot import start_telegram_bot, stop_telegram_bot
 from app.core.memory import Memory
 from app.cloud.sessions import SessionManager
 from app.concierge.persona import get_persona
 
+_asegurar_utf8()
 logger = get_logger(__name__)
 _agent_loop = None
 _session_manager = None
