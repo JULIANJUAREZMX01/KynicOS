@@ -150,8 +150,12 @@ def raices() -> list[Path]:
             trozo = trozo.strip()
             if trozo:
                 candidatas.append(Path(trozo).expanduser())
-    cwd = Path.cwd()
-    candidatas += [cwd, cwd.parent, Path.home() / "Documents"]
+    # Si la variable esta puesta, manda ella: no se anaden cwd ni home.
+    # Antes se anadian siempre y un repo hermano del directorio padre colaba
+    # como presente, rompiendo el catalogo y la busqueda (tests/test_ecosystem).
+    if not crudo:
+        cwd = Path.cwd()
+        candidatas += [cwd, cwd.parent, Path.home() / "Documents"]
     vistas: list[Path] = []
     for c in candidatas:
         try:
