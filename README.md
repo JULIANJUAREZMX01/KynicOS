@@ -12,6 +12,19 @@ KynicOS is a unified AI operations platform designed for hospitality environment
 
 ---
 
+## 🚀 Arranque en Windows (nodo primario)
+
+Un solo bloque, sin administrador y sin costo:
+
+```powershell
+cd $HOME\Documents
+git clone https://github.com/JULIANJUAREZMX01/KynicOS.git
+cd KynicOS
+.\nodo\arranque-todo-en-uno.ps1
+```
+
+Guía explicativa paso a paso, con problemas comunes y su arreglo: [`docs/GUIA-ARRANQUE-WINDOWS.md`](docs/GUIA-ARRANQUE-WINDOWS.md)
+
 ## 🔗 Quick Links
 
 | Recurso | URL |

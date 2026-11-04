@@ -40,3 +40,9 @@
 - Bug corregido: un return mal indentado aprobaba cualquier palabra; detectado por las pruebas
 - Webhook acepta callback_query y reutiliza solicitud pendiente (una sola notificación)
 - CLI: kynikos doble-paso estado|solicitar|verificar
+
+## 3 nov 2026 (noche) — arranque en Windows documentado (ADR-026)
+- `nodo/instalar.ps1`: instala Python/Ollama, descarga modelo, crea .env con token por entrada oculta
+- `nodo/arranque-todo-en-uno.ps1`: bloque único de cinco pasos con verificación de configuración
+- `docs/GUIA-ARRANQUE-WINDOWS.md`: pasos, tabla de configuración y problemas comunes
+- Pendiente real: ejecutarlo en la PC para confirmar el arranque (aquí no hay PowerShell)

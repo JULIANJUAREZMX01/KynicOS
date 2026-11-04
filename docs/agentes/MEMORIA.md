@@ -6,3 +6,4 @@
 | Fecha | Área | Problema | Técnica aplicada | Resultado |
 |---|---|---|---|---|
 | 2026-11-03 | Inicio | Memoria creada | Sembrada al migrar de Jules | Pendiente de aprendizajes |
+| 2026-11-03 | Nodo / Windows | El instalador solo existía para Linux y Mac; el nodo no arrancaba en la PC real (Windows) | `nodo/instalar.ps1` + `nodo/arranque-todo-en-uno.ps1` + `docs/GUIA-ARRANQUE-WINDOWS.md`; token por entrada oculta, política de ejecución solo por proceso | Camino de instalación para Windows, validado por análisis estático (sin pwsh en el sandbox) |
