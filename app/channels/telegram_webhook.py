@@ -29,6 +29,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 
 from app.config.schema import Settings
 from app.concierge.persona import get_persona
+from app.security import doble_paso
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -69,8 +70,92 @@ async def enviar_mensaje(chat_id: int, texto: str) -> None:
             )
 
 
+async def enviar_solicitud_doble_paso(chat_id: int, id_solicitud: str) -> None:
+    """Manda UNA notificación con botones. Nada se ejecuta hasta que se autorice."""
+    s = _settings_actual()
+    if not s.telegram_token:
+        return
+    cuerpo = {
+        "chat_id": chat_id,
+        "text": ("🔐 *Segundo paso requerido*\n\n"
+                 "Se pronunció la palabra clave. Nada se ha ejecutado todavía.\n"
+                 f"Tienes {doble_paso.TTL_SOLICITUD} segundos para autorizar."),
+        "parse_mode": "Markdown",
+        "reply_markup": {"inline_keyboard": [[
+            {"text": "✅ Autorizar", "callback_data": f"dp:auth:{id_solicitud}"},
+            {"text": "🚫 Rechazar", "callback_data": f"dp:deny:{id_solicitud}"},
+        ]]},
+    }
+    async with httpx.AsyncClient(timeout=30) as cliente:
+        await cliente.post(f"{TELEGRAM_API}/bot{s.telegram_token}/sendMessage", json=cuerpo)
+
+
+async def responder_boton(callback: dict) -> None:
+    """Atiende la pulsación de Autorizar o Rechazar."""
+    s = _settings_actual()
+    if not s.telegram_token:
+        return
+    datos = callback.get("data") or ""
+    chat_id = ((callback.get("message") or {}).get("chat") or {}).get("id")
+    autor = (callback.get("from") or {}).get("id")
+    id_callback = callback.get("id")
+    base = f"{TELEGRAM_API}/bot{s.telegram_token}"
+
+    async with httpx.AsyncClient(timeout=30) as cliente:
+        if s.telegram_user_id and str(autor) != str(s.telegram_user_id):
+            await cliente.post(base + "/answerCallbackQuery",
+                               json={"callback_query_id": id_callback, "text": "No autorizado."})
+            return
+        if not chat_id or not datos.startswith("dp:"):
+            return
+        partes = datos.split(":", 2)
+        accion = partes[1] if len(partes) > 1 else ""
+        id_solicitud = partes[2] if len(partes) > 2 else ""
+
+        try:
+            if accion == "auth":
+                palabra, expira = doble_paso.autorizar(id_solicitud, chat_id)
+                import time as _t
+                minutos = max(1, int((expira - _t.time()) / 60))
+                await enviar_mensaje(
+                    chat_id,
+                    "✅ *Autorizado.*\n\nPalabra del segundo paso:\n"
+                    f"`{palabra}`\n\nVale {minutos} minutos y un solo uso. "
+                    "No la compartas ni la guardes en el chat.")
+                await cliente.post(base + "/answerCallbackQuery",
+                                   json={"callback_query_id": id_callback, "text": "Autorizado"})
+            elif accion == "deny":
+                doble_paso.rechazar(id_solicitud, chat_id)
+                await enviar_mensaje(chat_id, "🚫 Rechazado. No se emitió palabra y no se ejecutó nada.")
+                await cliente.post(base + "/answerCallbackQuery",
+                                   json={"callback_query_id": id_callback, "text": "Rechazado"})
+        except doble_paso.ErrorDoblePaso as error:
+            await enviar_mensaje(chat_id, f"⚠️ {error}")
+            await cliente.post(base + "/answerCallbackQuery",
+                               json={"callback_query_id": id_callback, "text": "No se pudo"})
+
+        # quitar botones para evitar doble pulsación
+        mensaje = callback.get("message") or {}
+        if mensaje.get("message_id"):
+            await cliente.post(base + "/editMessageReplyMarkup",
+                               json={"chat_id": chat_id, "message_id": mensaje["message_id"]})
+
+
 async def procesar(chat_id: int, texto: str) -> None:
     """Genera la respuesta con la cadena de proveedores y la envía."""
+    # Paso 1: la palabra clave no llega al modelo, solo abre la autorización
+    if doble_paso.detectar_primer_paso(texto):
+        try:
+            solicitud, es_nueva = doble_paso.solicitar(chat_id)
+        except doble_paso.ErrorDoblePaso as error:
+            await enviar_mensaje(chat_id, f"⚠️ {error}")
+            return
+        if es_nueva:
+            await enviar_solicitud_doble_paso(chat_id, solicitud.id)
+        else:
+            await enviar_mensaje(chat_id, "Ya hay una solicitud pendiente: revisa el mensaje con los botones.")
+        return
+
     try:
         from app.cloud.providers import ProviderManager  # import diferido: arranque rápido
 
@@ -103,6 +188,13 @@ async def recibir_actualizacion(
         raise HTTPException(status_code=403, detail="secreto de webhook inválido")
 
     datos = await request.json()
+
+    # Pulsación de botón (segundo paso)
+    callback = datos.get("callback_query")
+    if callback:
+        tareas.add_task(responder_boton, callback)
+        return {"ok": True, "tipo": "callback"}
+
     mensaje = datos.get("message") or datos.get("edited_message") or {}
     chat_id = (mensaje.get("chat") or {}).get("id")
     texto = mensaje.get("text") or ""
@@ -143,7 +235,7 @@ async def registrar_webhook(base_url: str, secreto: str = "") -> dict[str, Any]:
         return {"ok": False, "error": "Telegram exige HTTPS"}
     cuerpo: dict[str, Any] = {
         "url": base_url.rstrip("/") + "/api/telegram",
-        "allowed_updates": ["message", "edited_message"],
+        "allowed_updates": ["message", "edited_message", "callback_query"],
         "drop_pending_updates": True,
     }
     if secreto:

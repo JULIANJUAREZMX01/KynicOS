@@ -33,3 +33,10 @@
 - CLI ampliado: kynikos telegram --configurar y alias TELEGRAM_BOT_TOKEN
 - Token reenviado _5 invalido (Not Found); el operativo es _4: descartar el duplicado
 - Pendiente del jefe: pulsar /start en t.me/kynicOS_robot y arrancar el nodo en la PC
+
+## 3 nov 2026 (noche) — verificación de doble paso (ADR-025)
+- Nuevo app/security/doble_paso.py: palabra clave, notificación con botones, palabra efímera de un solo uso
+- 25/25 pruebas de lógica + integración con TestClient sin red
+- Bug corregido: un return mal indentado aprobaba cualquier palabra; detectado por las pruebas
+- Webhook acepta callback_query y reutiliza solicitud pendiente (una sola notificación)
+- CLI: kynikos doble-paso estado|solicitar|verificar

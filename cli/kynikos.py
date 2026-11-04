@@ -595,6 +595,51 @@ def cmd_config(args) -> int:
     return 0
 
 
+def cmd_doble_paso(args) -> int:
+    """Opera el flujo de doble paso desde la consola del nodo."""
+    sys.path.insert(0, str(RAIZ))
+    try:
+        from app.security import doble_paso as dp
+    except Exception as error:  # noqa: BLE001
+        print(f"No se pudo cargar el módulo de doble paso: {type(error).__name__}")
+        return 2
+
+    accion = (args.extra[0] if args.extra else "estado").lower()
+
+    if accion == "estado":
+        estado = dp.estado_publico()
+        if args.json:
+            print(json.dumps(estado, indent=2, ensure_ascii=False))
+            return 0
+        print(f"Primer paso configurado  {'sí' if estado['configurado'] else 'NO (define KYNIKOS_PALABRA_1)'}")
+        print(f"Solicitudes pendientes   {estado['pendientes']}")
+        print(f"Bloqueado                {'sí' if estado['bloqueado'] else 'no'}")
+        print(f"Ventana de autorización  {estado['ttl_solicitud_s']} s")
+        print(f"Vida de la palabra       {estado['vida_palabra_s']} s")
+        return 0
+
+    if accion == "solicitar":
+        try:
+            solicitud, nueva = dp.solicitar(args.chat or 0)
+        except dp.ErrorDoblePaso as error:
+            print(f"No se pudo solicitar: {error}")
+            return 1
+        print(f"Solicitud {'creada' if nueva else 'reutilizada'}: {solicitud.id}")
+        print("Ahora falta la autorización por Telegram (botón) antes de emitir palabra.")
+        return 0
+
+    if accion == "verificar":
+        if len(args.extra) < 2:
+            print("Falta la palabra. Uso: kynikos doble-paso verificar KALPIXK-XXXX-XXXX")
+            return 2
+        ok = dp.verificar(args.extra[1])
+        print("Palabra válida y consumida." if ok else "Palabra inválida, vencida o ya usada.")
+        return 0 if ok else 1
+
+    print("Acciones: estado | solicitar | verificar <palabra>")
+    return 2
+
+
 def cmd_service(args) -> int:
     sistema = platform.system()
     if sistema == "Windows":
@@ -638,6 +683,7 @@ COMANDOS = {
     "models": cmd_models,
     "config": cmd_config,
     "service": cmd_service,
+    "doble-paso": cmd_doble_paso,
 }
 
 
@@ -657,6 +703,8 @@ def main() -> int:
     parser.add_argument("--configurar", action="store_true",
                         help="deja descripción y comandos del bot listos")
     parser.add_argument("--cambiar", nargs="*", help="clave=valor para config")
+    parser.add_argument("--chat", type=int, help="chat de Telegram para la solicitud")
+    parser.add_argument("extra", nargs="*", help="acción y argumentos del comando")
     args = parser.parse_args()
     return COMANDOS[args.comando](args)
 
