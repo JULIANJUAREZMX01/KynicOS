@@ -87,23 +87,70 @@ Titulo "4/6 · Entorno y configuración"
 $python = Join-Path $repo ".venv\Scripts\python.exe"
 $envFile = Join-Path $repo ".env"
 
-if ((Test-Path $python) -and (Test-Path $envFile)) {
-    Bien "El entorno ya existe; no hace falta reinstalar."
-} else {
-    Info "Instalando. Te pedirá el token del bot (no se ve al pegarlo) y la palabra del primer paso."
+function Test-Entorno {
+    # No basta con que exista .venv: importa lo que el nodo necesita de verdad.
+    if (-not (Test-Path $python)) { return $false }
+    & $python -c "import telegram, loguru, httpx" 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+if (-not (Test-Path $python)) {
+    Info "Creando el entorno e instalando dependencias."
+    Info "Te pedirá el token del bot (no se ve al pegarlo) y la palabra del primer paso."
     try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop } catch { }
     & (Join-Path $PSScriptRoot "instalar.ps1")
     if ($LASTEXITCODE -ne 0) {
         Mal "La instalación no terminó. Lee el mensaje rojo de arriba."
         exit 1
     }
-    if (-not (Test-Path $python)) { Mal "No se creó el entorno .venv."; exit 1 }
-    Bien "Entorno y .env listos."
+}
+
+if (-not (Test-Entorno)) {
+    Info "El entorno existe pero le faltan dependencias. Reparando (tarda un poco)..."
+    foreach ($req in @("requirements.txt", "requirements-bot.txt")) {
+        $rutaReq = Join-Path $repo $req
+        if (Test-Path $rutaReq) {
+            Info "  instalando $req"
+            & $python -m pip install -q -r $rutaReq 2>&1 | Out-Null
+        }
+    }
+    if (-not (Test-Entorno)) {
+        Mal "No se pudieron instalar las dependencias."
+        Info "Ejecútalo a mano para ver el error real:"
+        Info "  .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-bot.txt"
+        exit 1
+    }
+}
+Bien "Entorno con todas las dependencias."
+
+if (-not (Test-Path $envFile)) {
+    Mal "No hay .env. Ejecuta primero .\nodo\instalar.ps1 para configurar el token."
+    exit 1
 }
 
 $lineas = Get-Content $envFile
-$token = (($lineas | Where-Object { $_ -like "TELEGRAM_TOKEN=*" }) -split "=", 2)[1].Trim()
+$token = (($lineas | Where-Object { $_ -like "TELEGRAM_TOKEN=*" }) -split "=", 2)[1]
 if ([string]::IsNullOrWhiteSpace($token)) { Mal "TELEGRAM_TOKEN vacío en .env"; exit 1 }
+$token = $token.Trim()
+
+# El token se valida contra Telegram ANTES de arrancar: si está mal, el nodo
+# muere igual y el mensaje de Python no lo explica.
+Info "Comprobando el token con Telegram..."
+try {
+    $me = Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getMe" -TimeoutSec 20
+    if (-not $me.ok) { throw "respuesta sin ok" }
+    Bien "Token válido: @$($me.result.username)"
+    if ($me.result.username -ne "kynicOS_robot") {
+        Aviso "Ojo: este token es de @$($me.result.username), no de @kynicOS_robot."
+        Aviso "Puede funcionar, pero no es el bot que esperabas."
+    }
+} catch {
+    Mal "El token del .env no es válido para Telegram."
+    Info "Suele pasar por pegar el token de otro bot, o uno incompleto."
+    Info "Sácalo de @BotFather: /mybots -> tu bot -> API Token."
+    Info "Corrígelo con:  notepad .env"
+    exit 1
+}
 $env:TELEGRAM_TOKEN = $token
 Bien "Token cargado desde .env."
 
