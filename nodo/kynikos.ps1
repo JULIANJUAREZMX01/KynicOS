@@ -85,8 +85,11 @@ function Test-Entorno {
 
 function Nodo-Vivo {
     # Por linea de comandos...
-    $p = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-         Where-Object { $_.CommandLine -like "*kynikos.py*run*" -or $_.CommandLine -like "*app.main*" }
+    $p = $null
+    try {
+        $p = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
+             Where-Object { $_.CommandLine -like "*kynikos.py*run*" -or $_.CommandLine -like "*app.main*" }
+    } catch { $p = $null }   # CIM no disponible: se resuelve por puerto mas abajo
     if ($p) { return $p }
     # ...y por puerto: una instancia lanzada por la tarea programada puede tener
     # otra linea de comandos y seguir ocupando el 8000. Eso fue lo que tumbo el
@@ -105,7 +108,9 @@ function Get-ProcesoPuerto($puerto) {
     # dejo a Julian con 'FALLO el nodo no esta escuchando' seis veces seguidas.
     $ids = @()
     $patron = "[:.]$puerto\s+\S+\s+LISTENING\s+(\d+)"
-    foreach ($linea in (netstat -ano 2>$null)) {
+    $salida = @()
+    try { $salida = netstat -ano 2>$null } catch { return @() }
+    foreach ($linea in $salida) {
         $m = [regex]::Match($linea, $patron, 'IgnoreCase')
         if ($m.Success) { $ids += [int]$m.Groups[1].Value }
     }
