@@ -149,6 +149,36 @@ function Get-Nodo {
   [pscustomobject]@{ vivo = [bool]$proc; pid = $pidNodo; telegram = $telegram; detalle = $detalle }
 }
 
+function Get-Nodo {
+  # Un PID o un estado "Ready" no prueban nada. Lo que prueba que el nodo
+  # atiende es el conflicto 409 de Telegram: solo ocurre si alguien mas esta
+  # consumiendo getUpdates, es decir, si el nodo esta escuchando de verdad.
+  $proc = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+          Where-Object { $_.CommandLine -like '*kynikos.py*run*' }
+  $pidNodo = ($proc | Select-Object -First 1).ProcessId
+  $telegram = $false
+  $detalle = 'sin token en .env'
+  $envFile = Join-Path $RepoPath '.env'
+  if (Test-Path $envFile) {
+    $linea = Get-Content $envFile | Where-Object { $_ -like 'TELEGRAM_TOKEN=*' } | Select-Object -First 1
+    if ($linea) {
+      $tok = ($linea -split '=', 2)[1].Trim()
+      if ($tok.Length -gt 10) {
+        try {
+          Invoke-RestMethod -Uri "https://api.telegram.org/bot$tok/getUpdates?timeout=0&limit=1" -TimeoutSec 15 | Out-Null
+          $detalle = 'nadie escucha (sin conflicto)'
+        } catch {
+          $codigo = $null
+          try { $codigo = $_.Exception.Response.StatusCode.value__ } catch { }
+          if ($codigo -eq 409) { $telegram = $true; $detalle = 'escuchando (409)' }
+          else { $detalle = "error de red o token: $codigo" }
+        }
+      }
+    }
+  }
+  [pscustomobject]@{ vivo = [bool]$proc; pid = $pidNodo; telegram = $telegram; detalle = $detalle }
+}
+
 function Send-AlAgente([string]$texto, [string]$rutaLog) {
   $registro = [ordered]@{
     fecha = $stamp
@@ -206,6 +236,10 @@ function Invoke-Reporte {
   Write-Paso "nodo: $(if($nodo.vivo){"proceso vivo (PID $($nodo.pid))"}else{'proceso ausente'})"
   Write-Paso "telegram: $($nodo.detalle)"
 
+  $nodo = Get-Nodo
+  Write-Paso "nodo: $(if($nodo.vivo){"proceso vivo (PID $($nodo.pid))"}else{'proceso ausente'})"
+  Write-Paso "telegram: $($nodo.detalle)"
+
   $tarea = Get-Tarea
   Write-Paso "tarea programada '$TaskName': $tarea"
 
@@ -219,6 +253,8 @@ function Invoke-Reporte {
   $partes += "api $(if($api){'ok'}else{'sin respuesta'})"
   $partes += "vars $($vars.total - $vars.faltan.Count)/$($vars.total)"
   if ($vars.faltan.Count) { $partes += "faltan $($vars.faltan -join ',')" }
+  $partes += "nodo $(if($nodo.vivo){'vivo'}else{'ausente'})"
+  $partes += "telegram $(if($nodo.telegram){'escuchando'}else{'mudo'})"
   $partes += "nodo $(if($nodo.vivo){'vivo'}else{'ausente'})"
   $partes += "telegram $(if($nodo.telegram){'escuchando'}else{'mudo'})"
   $partes += "tarea $tarea"
