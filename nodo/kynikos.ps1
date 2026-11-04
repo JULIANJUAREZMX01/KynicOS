@@ -99,9 +99,17 @@ function Nodo-Vivo {
 }
 
 function Get-ProcesoPuerto($puerto) {
-    $c = Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction SilentlyContinue
-    if ($c) { return @($c | Select-Object -ExpandProperty OwningProcess -Unique) }
-    return @()
+    # netstat en vez de Get-NetTCPConnection: si el modulo NetTCPIP falla o no
+    # esta, el cmdlet devuelve vacio EN SILENCIO y el nodo parece caido aunque
+    # uvicorn diga 'Uvicorn running on http://0.0.0.0:8000'. Ese falso negativo
+    # dejo a Julian con 'FALLO el nodo no esta escuchando' seis veces seguidas.
+    $ids = @()
+    $patron = "[:.]$puerto\s+\S+\s+LISTENING\s+(\d+)"
+    foreach ($linea in (netstat -ano 2>$null)) {
+        $m = [regex]::Match($linea, $patron, 'IgnoreCase')
+        if ($m.Success) { $ids += [int]$m.Groups[1].Value }
+    }
+    return @($ids | Sort-Object -Unique)
 }
 
 function Test-PuertoLibre($puerto) {
