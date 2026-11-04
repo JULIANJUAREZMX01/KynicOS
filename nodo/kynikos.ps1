@@ -430,7 +430,9 @@ switch ($Accion) {
         Paso-Detener
         Paso-Arrancar
         $ok = Paso-Validar
-        if ($ok -and -not $SinTarea) { Paso-Tarea }
+        # La persistencia se decide por el proceso vivo, no por la validacion:
+        # un falso negativo no debe dejar la maquina sin arranque automatico.
+        if (-not $SinTarea -and (Nodo-Vivo)) { Paso-Tarea }
         if (-not $ok) { exit 1 }
     }
 }

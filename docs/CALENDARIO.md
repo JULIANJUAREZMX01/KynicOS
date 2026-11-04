@@ -62,3 +62,13 @@ odo\kynikos.ps1` y confirmar con
 - Siguiente: replicar en las demás computadoras usando `doctor` para elegir
   modelo según RAM.
 
+## 3 nov 2026 - Nodo KynicOS operativo en la PC de Julián
+
+- @kynicOS_robot responde en Telegram con qwen2.5:7b sobre Ollama, en la PC
+  "patricia73" (Ryzen 5 5500U, 16 GB). Polling activo en el puerto 8000.
+- Orquestador unico `nodo/kynikos.ps1` (ADR-027); los seis scripts previos son alias.
+- Pendiente: registrar el arranque automatico (`kynikos.ps1 tarea`) y confirmar
+  que responde tras reiniciar Windows.
+- Falso negativo corregido: la validacion ya no usa getUpdates, que robaba
+  mensajes al bot y fallaba mientras este procesaba uno.
+
