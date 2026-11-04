@@ -1,82 +1,66 @@
-"""Tests for tool executor"""
+"""Pruebas del ejecutor de herramientas.
+
+Escritas contra la API actual: ToolExecutor no toma argumentos y todo pasa por
+execute({"name": ..., "args": {...}}). Las versiones anteriores llamaban a
+metodos que ya no existen (read_file, list_files) e instanciaban la clase con
+un directorio, asi que fallaban siempre y tapaban el resto del CI.
+"""
 
 import pytest
 from pathlib import Path
+
 from app.core.tools import ToolExecutor
-from app.core.context import AgentContext
 
 
 @pytest.fixture
-def tool_executor(tmp_path):
-    """Create tool executor with temporary workspace"""
-    executor = ToolExecutor(str(tmp_path))
-    return executor
-
-
-@pytest.fixture
-def agent_context():
-    """Create test agent context"""
-    ctx = AgentContext(
-        session_id="test_session",
-        user_id="test_user",
-        channel="test"
-    )
-    return ctx
+def executor():
+    return ToolExecutor()
 
 
 @pytest.mark.asyncio
-async def test_tool_executor_initialization(tool_executor):
-    """Test tool executor initialization"""
-    assert tool_executor is not None
-    assert "execute_shell" in tool_executor.tools
-    assert "read_file" in tool_executor.tools
-    assert "write_file" in tool_executor.tools
+async def test_se_crea_sin_argumentos(executor):
+    assert executor is not None
 
 
 @pytest.mark.asyncio
-async def test_read_file_not_found(tool_executor, agent_context):
-    """Test reading non-existent file"""
-    result = await tool_executor.read_file(
-        {"path": "nonexistent.txt"},
-        agent_context
-    )
-    assert "not found" in result.lower()
+async def test_herramienta_desconocida(executor):
+    salida = await executor.execute({"name": "no_existe", "args": {}})
+    assert "desconocida" in salida.lower()
 
 
 @pytest.mark.asyncio
-async def test_write_and_read_file(tool_executor, agent_context, tmp_path):
-    """Test writing and reading a file"""
-    # Write file
-    write_result = await tool_executor.write_file(
-        {"path": "test.txt", "content": "Hello, World!"},
-        agent_context
-    )
-    assert "written" in write_result.lower()
-    
-    # Read file
-    read_result = await tool_executor.read_file(
-        {"path": "test.txt"},
-        agent_context
-    )
-    assert "Hello, World!" in read_result
+async def test_comando_vacio(executor):
+    salida = await executor.execute({"name": "execute_shell", "args": {"command": "   "}})
+    assert "vacío" in salida.lower() or "vacio" in salida.lower()
 
 
 @pytest.mark.asyncio
-async def test_list_files_empty(tool_executor, agent_context):
-    """Test listing empty directory"""
-    result = await tool_executor.list_files(
-        {"directory": "."},
-        agent_context
-    )
-    assert "empty" in result.lower() or result == ""
+async def test_comando_peligroso_bloqueado(executor):
+    salida = await executor.execute({"name": "execute_shell", "args": {"command": "rm -rf /"}})
+    assert "bloqueado" in salida.lower() or "denegado" in salida.lower() or "❌" in salida
 
 
 @pytest.mark.asyncio
-async def test_tool_not_found(tool_executor, agent_context):
-    """Test calling non-existent tool"""
-    result = await tool_executor.execute(
-        "nonexistent_tool",
-        {},
-        agent_context
+async def test_escribir_y_leer_archivo(executor, tmp_path):
+    destino = tmp_path / "prueba.txt"
+    escrito = await executor.execute(
+        {"name": "write_file", "args": {"path": str(destino), "content": "Hola, KynicOS"}}
     )
-    assert "not found" in result.lower()
+    assert "❌" not in escrito, escrito
+
+    leido = await executor.execute({"name": "read_file", "args": {"path": str(destino)}})
+    assert "Hola, KynicOS" in leido
+
+
+@pytest.mark.asyncio
+async def test_leer_archivo_inexistente(executor, tmp_path):
+    salida = await executor.execute(
+        {"name": "read_file", "args": {"path": str(tmp_path / "no-existe.txt")}}
+    )
+    assert "no existe" in salida.lower() or "❌" in salida
+
+
+@pytest.mark.asyncio
+async def test_ruta_vacia(executor):
+    salida = await executor.execute({"name": "read_file", "args": {"path": ""}})
+    assert "vacía" in salida.lower() or "vacia" in salida.lower()

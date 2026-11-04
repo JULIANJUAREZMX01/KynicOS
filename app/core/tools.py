@@ -1,6 +1,8 @@
 """Tool execution for agent - shell, files, git, web"""
 
 import asyncio
+import os
+import tempfile
 import subprocess
 import json
 from pathlib import Path
@@ -12,9 +14,23 @@ from app.utils import get_logger
 logger = get_logger(__name__)
 
 # Safe paths - restrict to user's development directory
-SAFE_BASE_PATHS = [
-    Path("C:/Users/QUINTANA/sistemas"),
-]
+def _bases_seguras() -> list[Path]:
+    """Directorios donde el ejecutor puede leer y escribir.
+
+    Antes era una sola ruta fija (C:/Users/QUINTANA/sistemas), de otra maquina:
+    en cualquier otro equipo read_file y write_file respondian siempre
+    "Acceso denegado", incluido el nodo de Julian. Ahora se puede fijar con
+    KYNIKOS_WORKSPACE y, si no, se usan directorios razonables del sistema.
+    """
+    bases: list[Path] = []
+    extra = os.environ.get("KYNIKOS_WORKSPACE", "").strip()
+    if extra:
+        bases.append(Path(extra))
+    bases += [Path.cwd(), Path.home(), Path(tempfile.gettempdir())]
+    return bases
+
+
+SAFE_BASE_PATHS = _bases_seguras()
 
 
 class ToolExecutor:
