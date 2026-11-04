@@ -6,22 +6,45 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path -Parent $PSScriptRoot)
 
+
+function Actualizar-Ruta {
+    # Windows no ve programas recien instalados hasta reabrir la terminal.
+    # Recargamos el PATH de la maquina y del usuario en ESTA sesion.
+    $m = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $u = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$m;$u"
+}
+
+function Aviso-Grande($texto) {
+    Write-Host ""
+    Write-Host "  ============================================================" -ForegroundColor Red
+    Write-Host "   $texto" -ForegroundColor Red
+    Write-Host "  ============================================================" -ForegroundColor Red
+    Write-Host ""
+}
+
 Write-Host "== KYNIKOS · nodo primario (Windows) ==" -ForegroundColor Yellow
 
 # 1. Python
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Host "-- instalando Python 3.12" 
     winget install --id Python.Python.3.12 -e --silent
-    Write-Host "Cierra y abre PowerShell para que Windows vea Python, y vuelve a ejecutar este script." -ForegroundColor Cyan
-    exit 0
+    Actualizar-Ruta
+    if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+        Aviso-Grande "INSTALACION INCOMPLETA: cierra PowerShell, abre una nueva y repite el script"
+        exit 1
+    }
 }
 
 # 2. Ollama
 if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
     Write-Host "-- instalando Ollama (modelo local, sin costo por token)"
     winget install --id Ollama.Ollama -e --silent
-    Write-Host "Cierra y abre PowerShell para que Windows vea Ollama, y vuelve a ejecutar este script." -ForegroundColor Cyan
-    exit 0
+    Actualizar-Ruta
+    if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
+        Aviso-Grande "INSTALACION INCOMPLETA: cierra PowerShell, abre una nueva y repite el script"
+        exit 1
+    }
 }
 
 # 3. Modelo: 7B es el óptimo para 16 GB sin GPU dedicada (unos 5 tok/s)
@@ -56,6 +79,12 @@ KYNIKOS_PALABRA_1=$palabra
 KYNIKOS_ESTADO_DIR=.kynikos
 "@ | Set-Content -Path .env -Encoding UTF8
     Write-Host "-- .env creado"
+}
+
+# 5b. Verificacion dura: sin .venv no hay nodo
+if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
+    Aviso-Grande "FALLO: no se creo el entorno .venv. Revisa los errores de arriba."
+    exit 1
 }
 
 # 6. Comprobar el bot y que NO haya webhook que estorbe al polling

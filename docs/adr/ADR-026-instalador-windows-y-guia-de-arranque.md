@@ -38,3 +38,12 @@ Tres piezas complementarias, cada una con un propósito distinto:
 - El arranque deja de depender de memoria conversacional: está escrito, versionado y con verificaciones automáticas de configuración.
 - Si mañana otra PC se suma como nodo, el mismo bloque sirve sin reescribir nada.
 - Riesgo residual: depende de `winget`, disponible en Windows 10 actualizado y Windows 11. En equipos sin `winget` hay que instalar Python, Git y Ollama a mano; la guía lo cubre en la tabla de problemas.
+
+## Primer arranque real (3 nov 2026, noche) — lo que aprendimos
+
+Se probó en la PC de destino y apareció un fallo que el análisis estático no podía ver:
+
+- **Síntoma:** `ObjectNotFound: (.\.venv\Scripts\python.exe) CommandNotFoundException`.
+- **Causa raíz doble:** (1) el instalador terminaba con `exit 0` al instalar Python u Ollama, con un mensaje fácil de pasar por alto, así que nunca creaba el `.venv`; (2) la guía listaba «Actualizar» como último paso y se ejecutó antes de haber instalado.
+- **Corrección:** `Actualizar-Ruta` recarga el PATH de la sesión tras `winget`, de modo que normalmente **ya no hace falta reabrir PowerShell**; si aun así no aparece el programa, el script sale con `exit 1` y un aviso en rojo en lugar de `exit 0`. Además hay una verificación dura al final: si no existe `.venv\Scripts\python.exe`, falla con aviso grande. La guía dejó la advertencia sobre el orden y una fila nueva en la tabla de problemas.
+- **Lección:** un `exit 0` en una ruta de «falta algo» es un éxito falso. Toda salida prematura de un instalador debe ser distinguible a simple vista.

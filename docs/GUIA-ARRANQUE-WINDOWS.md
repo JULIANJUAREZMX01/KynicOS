@@ -174,6 +174,8 @@ Ollama se instala como servicio y arranca con Windows por su cuenta, así que no
 
 ## Paso 9 · Actualizar el nodo
 
+> **Solo después de haber completado el paso 4 y arrancado el nodo al menos una vez.** Si lo ejecutas antes, el segundo comando falla con `ObjectNotFound: .\.venv\Scripts\python.exe` porque el entorno de Python todavía no existe. Eso no es un error del repositorio: significa que falta instalar.
+
 Cuando haya cambios nuevos en el repositorio:
 
 ```powershell
@@ -198,6 +200,7 @@ El segundo comando solo hace falta si cambiaron las dependencias. Ante la duda, 
 | `Unauthorized` o `401` al arrancar | Token mal copiado, con espacio o incompleto | Edita `.env`, revisa que no haya comillas ni espacios |
 | Respuestas muy lentas | Modelo grande para el hardware | Usa `qwen2.5:7b`; el 14B baja a ~3 tokens por segundo |
 | `Conflict: can't use getUpdates with webhook active` | Quedó un webhook registrado de una prueba anterior | `curl "https://api.telegram.org/bot<TU_TOKEN>/deleteWebhook"` |
+| `ObjectNotFound: .\.venv\Scripts\python.exe` | El instalador no terminó o se saltó: el entorno `.venv` todavía no existe | Ejecuta `.\nodo\instalar.ps1` completo. **No** corras el paso de actualizar antes de instalar |
 | Se corta solo | Windows suspendió la PC o se cerró la terminal | Usa la tarea del paso 8 |
 | No llega la notificación del doble paso | El chat con el bot no está iniciado | Escribe `/start` en `@kynicOS_robot` una vez |
 
