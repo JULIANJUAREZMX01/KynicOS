@@ -51,3 +51,14 @@
 - `nodo/arrancar-y-validar.ps1`: limpia tarea vieja, actualiza, instala, arranca y valida con el error 409 de Telegram
 - Guía reducida a tres bloques con validación explícita; página `kynikos.html` reescrita al mismo flujo
 - Pendiente: que Julián ejecute el bloque 2 en la PC (aquí no hay PowerShell)
+
+## 4 nov 2026 — Orquestador único del nodo (ADR-027)
+
+- `nodo/kynikos.ps1` concentra instalación, configuración, arranque, validación,
+  diagnóstico y arranque automático. El resto de scripts son alias.
+- Pendiente en la PC de Julián: ejecutar `.
+odo\kynikos.ps1` y confirmar con
+  `/estado` en @kynicOS_robot.
+- Siguiente: replicar en las demás computadoras usando `doctor` para elegir
+  modelo según RAM.
+
