@@ -72,3 +72,4 @@ odo\kynikos.ps1` y confirmar con
 - Falso negativo corregido: la validacion ya no usa getUpdates, que robaba
   mensajes al bot y fallaba mientras este procesaba uno.
 | 2026-11-04 | Nodo KynicOS | Unificacion: automatico.ps1 pasa a alias, se corrige $pid (variable de solo lectura) y CIM/netstat protegidos. Validado con pwsh real instalado en el sandbox. |
+| 2026-11-04 | Nodo KynicOS | Barrido: 9 formas de arrancar, 3 orquestadores y 6 documentos con comandos distintos. Se declara `kynikos.ps1` llave maestra única y `docs/ARRANQUE.md` fuente única (ADR-031). |

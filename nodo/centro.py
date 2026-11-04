@@ -99,6 +99,28 @@ def leer_env() -> dict[str, str]:
     return datos
 
 
+def _delegar(accion: str) -> bool:
+    """Pasa la accion a la llave maestra (nodo\\kynikos.ps1, ADR-031).
+
+    El centro decide QUE hacer; como hacerlo vive solo en el orquestador.
+    Devuelve False en Linux o si el orquestador no esta, para que la logica
+    local siga sirviendo de respaldo.
+    """
+    if os.name != "nt":
+        return False
+    ps1 = RAIZ / "nodo" / "kynikos.ps1"
+    if not ps1.exists():
+        return False
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1), accion],
+            cwd=str(RAIZ),
+        )
+        return True
+    except Exception:
+        return False
+
+
 def puerto_nodo() -> int:
     for clave in ("KYNIKOS_PORT", "PORT"):
         valor = os.environ.get(clave) or leer_env().get(clave, "")
@@ -206,6 +228,8 @@ def nodo_vivo() -> bool:
 # ── acciones ────────────────────────────────────────────────────────────────
 
 def accion_estado() -> None:
+    if _delegar("estado"):
+        return
     puerto = puerto_nodo()
     ids = pids_en_puerto(puerto)
     print()
@@ -227,6 +251,8 @@ def accion_estado() -> None:
 
 
 def accion_arrancar() -> None:
+    if _delegar("arrancar"):
+        return
     puerto = puerto_nodo()
     print()
     if nodo_vivo():
@@ -265,6 +291,8 @@ def accion_arrancar() -> None:
 
 
 def accion_detener() -> None:
+    if _delegar("detener"):
+        return
     puerto = puerto_nodo()
     ids = pids_en_puerto(puerto)
     print()
@@ -292,6 +320,8 @@ def accion_reiniciar() -> None:
 
 
 def accion_logs() -> None:
+    if _delegar("logs"):
+        return
     print()
     if not LOG.exists():
         mal("todavía no hay kynikos.log")
@@ -316,6 +346,8 @@ def accion_logs() -> None:
 
 
 def accion_configurar() -> None:
+    if _delegar("configurar"):
+        return
     env = leer_env()
     print()
     gris("Enter deja el valor actual. Los valores no se muestran completos.")
@@ -400,6 +432,8 @@ def accion_requisitos() -> None:
 
 
 def accion_reparar() -> None:
+    if _delegar("reparar"):
+        return
     puerto = puerto_nodo()
     print()
     ids = pids_en_puerto(puerto)

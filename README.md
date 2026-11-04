@@ -12,26 +12,21 @@ KynicOS is a unified AI operations platform designed for hospitality environment
 
 ---
 
-## 🚀 Arranque en Windows (nodo primario)
+## 🚀 Arranque
 
-Dos bloques y una validación que no miente. Sin administrador y sin costo.
+Una sola llave maestra: **`nodo\kynikos.ps1`** (o doble clic en `nodo\ARRANCAR.cmd`).
 
 ```powershell
-# 1. traer el repositorio
-cd $HOME\Documents
-git clone https://github.com/JULIANJUAREZMX01/KynicOS.git
-cd KynicOS
-
-# 2. arrancar: instala lo que falte, no duplica y valida por API
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-.\nodo\automatico.ps1
+cd $HOME\Documents\KynicOS
+git pull
+.\nodo\kynikos.ps1
 ```
 
-El paso 2 es idempotente: si el nodo ya está arriba no arranca otra instancia, y si el puerto está ocupado por un duplicado lo libera antes. Termina con `NODO ARRIBA: agente activo y Telegram conectado`, comprobado contra `/api/status` (`agent_loop` y `telegram_token`), no contra el puerto ni contra el estado de Windows.
+Sin argumentos hace el flujo completo y verifica cada paso. Para el menú visual: `.\nodo\kynikos.ps1 centro`.
 
-Para el menú interactivo (estado, logs, configuración, reparación): `.\nodo\CENTRO.ps1`.
+**Todos los comandos, subcomandos y el mapa de archivos: → [docs/ARRANQUE.md](docs/ARRANQUE.md)**
 
-Guía completa: [`docs/GUIA-ARRANQUE-WINDOWS.md`](docs/GUIA-ARRANQUE-WINDOWS.md)
+Ese documento es la fuente única. Cualquier otro que repita comandos de arranque está obsoleto por definición (ADR-031).
 
 ## 🔗 Quick Links
 

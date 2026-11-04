@@ -1,31 +1,9 @@
-# CENTRO.ps1 — lanzador del centro de comando del nodo KYNIKOS
+# CENTRO.ps1 — ALIAS de nodo\kynikos.ps1 (ADR-031)
 #
-#   .\nodo\CENTRO.ps1
+# Tenia 31 lineas de logica propia que duplicaban al orquestador. Dos copias
+# divergen y la que se ejecuta acaba siendo la vieja. La logica vive solo en
+# nodo\kynikos.ps1.
 #
-# Busca el python del entorno del nodo y abre el menu. No instala nada ni
-# modifica nada: solo lanza nodo\centro.py, que hace el resto.
-
-$ErrorActionPreference = "Stop"
-$nodo = $PSScriptRoot
-$repo = Split-Path $nodo -Parent
-
-$candidatos = @(
-    (Join-Path $nodo ".venv\Scripts\python.exe"),
-    (Join-Path $repo ".venv\Scripts\python.exe")
-)
-$python = $candidatos | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $python) { $python = "python" }
-
-$centro = Join-Path $nodo "centro.py"
-if (-not (Test-Path $centro)) {
-    Write-Host "No encuentro nodo\centro.py" -ForegroundColor Red
-    exit 1
-}
-
-Push-Location $repo
-try {
-    & $python $centro
-} finally {
-    Pop-Location
-}
+# Uso recomendado: .\nodo\kynikos.ps1 centro
+& (Join-Path $PSScriptRoot "kynikos.ps1") centro
 exit $LASTEXITCODE

@@ -1,3 +1,6 @@
+> **Documento histórico.** La fuente única de arranque es [ARRANQUE.md](ARRANQUE.md) (ADR-031).
+> Lo que sigue se conserva por contexto; no lo uses como guía.
+
 # Arranque del nodo KYNIKOS en Windows
 
 Tres bloques. Copias, pegas y el propio script te confirma si quedó bien.

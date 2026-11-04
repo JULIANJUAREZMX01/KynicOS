@@ -22,7 +22,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("auto", "instalar", "configurar", "arrancar", "validar",
-                 "estado", "detener", "reparar", "tarea", "doctor", "logs", "comandos")]
+                 "estado", "detener", "reparar", "tarea", "doctor", "logs", "comandos", "centro")]
     [string]$Accion = "auto",
 
     [string]$Modelo = "",
@@ -464,6 +464,12 @@ switch ($Accion) {
     "reparar"    { Paso; if (Test-Entorno) { Bien "nada que reparar" } else { Paso-Entorno "qwen2.5:7b" } }
     "tarea"      { Paso-Tarea }
     "comandos"   { Paso-Comandos }
+    "centro" {
+        $py = Join-Path $repo ".venv\Scripts\python.exe"
+        if (-not (Test-Path $py)) { Mal "falta el entorno; corre primero: .\nodo\kynikos.ps1 instalar"; exit 1 }
+        & $py (Join-Path $repo "nodo\centro.py")
+        exit $LASTEXITCODE
+    }
     "logs" {
         foreach ($f in @("kynikos.log","kynikos.err.log")) {
             $ruta = Join-Path $repo $f
