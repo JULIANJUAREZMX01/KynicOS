@@ -10,6 +10,7 @@ from app.core.context import AgentContext
 
 logger = get_logger(__name__)
 _app: Optional[Application] = None
+_arranque: Optional[float] = None
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -29,6 +30,123 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     await message.reply_text(f"Hola {user.first_name}! 👋\n\n{greeting}")
     logger.info(f"User {user.id} started KynicOS bot")
+
+
+def _texto_log(ruta, lineas=12):
+    """Ultimas lineas del registro, sin reventar si no existe."""
+    from pathlib import Path
+    f = Path(ruta)
+    if not f.exists():
+        return "(todavia no hay registro)"
+    try:
+        with f.open("r", encoding="utf-8", errors="replace") as fh:
+            contenido = fh.readlines()[-lineas:]
+        return "".join(contenido).strip() or "(registro vacio)"
+    except Exception as e:
+        return f"(no se pudo leer: {e})"
+
+
+async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lista de comandos."""
+    texto = (
+        "<b>KYNIKOS · comandos</b>\n\n"
+        "/estado  — salud del nodo: modelo, memoria, proceso\n"
+        "/modelo  — modelo activo y ventana de contexto\n"
+        "/logs  — ultimas lineas del registro\n"
+        "/id  — tu ID de Telegram\n"
+        "/reiniciar  — reinicia el bot sin matar el proceso\n"
+        "/ayuda  — esta lista\n\n"
+        "Cualquier otro mensaje lo responde el agente."
+    )
+    await update.message.reply_text(texto, parse_mode="HTML")
+
+
+async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Salud real del nodo, sin inventar metricas."""
+    import os
+    import time
+    from app.config import Settings
+    from app.cloud import telegram_bot as tb
+
+    ajustes = Settings()
+    lineas = ["<b>KYNIKOS · estado</b>", ""]
+    lineas.append(f"Modelo: <code>{ajustes.ollama_model}</code>")
+    lineas.append(f"Contexto: {ajustes.ollama_num_ctx} tokens")
+    lineas.append(f"Salida max: {ajustes.max_tokens_salida}")
+    lineas.append(f"PID: {os.getpid()}")
+
+    arranque = getattr(tb, "_arranque", None)
+    if arranque:
+        minutos = int((time.time() - arranque) / 60)
+        lineas.append(f"Encendido hace: {minutos} min")
+
+    try:
+        import psutil
+        proc = psutil.Process(os.getpid())
+        lineas.append(f"RAM del nodo: {proc.memory_info().rss / 1024**2:.0f} MB")
+    except Exception:
+        pass
+
+    polling = "activo" if tb._app and tb._app.updater and tb._app.updater.running else "detenido"
+    lineas.append(f"Polling: {polling}")
+
+    await update.message.reply_text("\n".join(lineas), parse_mode="HTML")
+
+
+async def modelo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Modelo y proveedor configurados."""
+    from app.config import Settings
+    a = Settings()
+    texto = (
+        "<b>Modelo</b>\n"
+        f"Ollama: <code>{a.ollama_model}</code>\n"
+        f"URL: <code>{a.ollama_url}</code>\n"
+        f"Contexto: {a.ollama_num_ctx}\n"
+        f"Timeout: {a.timeout_llm:g} s"
+    )
+    await update.message.reply_text(texto, parse_mode="HTML")
+
+
+async def logs(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ultimas lineas del registro del nodo."""
+    import os
+    from pathlib import Path
+    raiz = Path(__file__).resolve().parents[2]
+    texto = _texto_log(raiz / "kynikos.log")
+    if len(texto) > 3500:
+        texto = texto[-3500:]
+    await update.message.reply_text(f"<pre>{texto}</pre>", parse_mode="HTML")
+
+
+async def mi_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """ID de Telegram del remitente."""
+    u = update.effective_user
+    await update.message.reply_text(
+        f"Tu ID: <code>{u.id}</code>\nChat: <code>{update.effective_chat.id}</code>",
+        parse_mode="HTML",
+    )
+
+
+async def reiniciar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Reinicia el polling del bot sin matar el proceso.
+
+    No se relanza el proceso: en Windows eso puede dejar el puerto 8000
+    atrapado y una instancia huerfana haciendo polling. Reiniciar el bot
+    resuelve el caso real (sesion de Telegram atascada).
+    """
+    import asyncio
+    from app.cloud.telegram_bot import stop_telegram_bot, start_telegram_bot
+
+    await update.message.reply_text("Reiniciando el bot...")
+    try:
+        await stop_telegram_bot()
+        await asyncio.sleep(2)
+        await start_telegram_bot()
+        await update.effective_chat.send_message("Listo, bot reiniciado y escuchando.")
+        logger.info("Reinicio manual solicitado desde Telegram")
+    except Exception as e:
+        logger.error(f"Fallo al reiniciar: {e}")
+        await update.effective_chat.send_message(f"No pude reiniciar: {e}")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -98,12 +216,22 @@ async def start_telegram_bot(settings: Settings) -> None:
     try:
         _app = Application.builder().token(settings.telegram_token).build()
         _app.add_handler(CommandHandler("start", start))
+        _app.add_handler(CommandHandler("ayuda", ayuda))
+        _app.add_handler(CommandHandler("help", ayuda))
+        _app.add_handler(CommandHandler("estado", estado))
+        _app.add_handler(CommandHandler("modelo", modelo))
+        _app.add_handler(CommandHandler("logs", logs))
+        _app.add_handler(CommandHandler("id", mi_id))
+        _app.add_handler(CommandHandler("reiniciar", reiniciar))
         _app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         await _app.initialize()
         await _app.start()
         if _app.updater is None:
             raise RuntimeError("Telegram updater is unavailable")
         await _app.updater.start_polling()
+        global _arranque
+        import time as _t
+        _arranque = _t.time()
         logger.info("🟢 Telegram bot polling started")
     except Exception as e:
         logger.error(f"Telegram bot error: {e}", exc_info=True)

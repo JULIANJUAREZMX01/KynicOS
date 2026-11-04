@@ -15,13 +15,14 @@
 #   .\nodo\kynikos.ps1 tarea           arranque automatico al iniciar sesion
 #   .\nodo\kynikos.ps1 doctor          diagnostico de la maquina
 #   .\nodo\kynikos.ps1 logs            ultimas lineas del nodo
+#   .\nodo\kynikos.ps1 comandos        registra el menu de comandos en Telegram
 #
 # Todo es idempotente: si algo ya esta, no se repite.
 
 param(
     [Parameter(Position = 0)]
     [ValidateSet("auto", "instalar", "configurar", "arrancar", "validar",
-                 "estado", "detener", "reparar", "tarea", "doctor", "logs")]
+                 "estado", "detener", "reparar", "tarea", "doctor", "logs", "comandos")]
     [string]$Accion = "auto",
 
     [string]$Modelo = "",
@@ -351,6 +352,54 @@ function Paso-Validar {
     return $false
 }
 
+function Paso-Comandos {
+    Paso "Menu de comandos en Telegram"
+    $token = (Leer-Env)["TELEGRAM_TOKEN"]
+    if ([string]::IsNullOrWhiteSpace($token)) { Mal "no hay token en .env; ejecuta: kynikos.ps1 configurar"; return }
+
+    $quien = Test-Token $token
+    if (-not $quien) { Mal "el token del .env no es valido"; return }
+
+    $comandos = @(
+        @{ command = "start";     description = "Saludo y estado de KynicOS" },
+        @{ command = "estado";    description = "Salud del nodo: modelo, RAM, polling" },
+        @{ command = "modelo";    description = "Modelo activo y contexto" },
+        @{ command = "logs";      description = "Ultimas lineas del registro" },
+        @{ command = "id";        description = "Tu ID de Telegram" },
+        @{ command = "reiniciar"; description = "Reinicia el bot" },
+        @{ command = "ayuda";     description = "Lista de comandos" }
+    )
+
+    $cuerpo = @{ commands = $comandos } | ConvertTo-Json -Depth 4 -Compress
+    try {
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/setMyCommands" -Method Post `
+            -ContentType "application/json" -Body $cuerpo -TimeoutSec 20 | Out-Null
+        Bien "menu de $($comandos.Count) comandos registrado en @$quien"
+    } catch {
+        Mal "Telegram rechazo el menu: $($_.Exception.Message)"
+        return
+    }
+
+    $corto = "Perro guardian tecnico. Nodo propio con modelo local: sin techo de tokens."
+    $largo = "KYNIKOS, nodo primario de Julian Juarez. Seguridad, infraestructura y automatizacion.`nCorre en hardware propio con modelo local: sin techo de tokens ni coste por consulta.`n`nComandos: /estado /modelo /logs /id /reiniciar /ayuda"
+
+    foreach ($par in @(@{ m = "setMyShortDescription"; k = "short_description"; v = $corto },
+                       @{ m = "setMyDescription";      k = "description";       v = $largo })) {
+        $b = @{ $($par.k) = $par.v } | ConvertTo-Json -Compress
+        try {
+            Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/$($par.m)" -Method Post `
+                -ContentType "application/json" -Body $b -TimeoutSec 20 | Out-Null
+        } catch { Aviso "no se pudo actualizar $($par.m)" }
+    }
+
+    $ver = Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getMyCommands" -TimeoutSec 20
+    if ($ver.ok) {
+        foreach ($c in $ver.result) { Write-Host ("   /" + $c.command.PadRight(10) + $c.description) -ForegroundColor DarkGray }
+    }
+    Aviso "revisa el menu en la barra de Telegram junto al campo de texto"
+}
+
+
 function Paso-Tarea {
     Paso "Arranque automatico"
     if (-not (Test-Path $script:python)) { Mal "el nodo no esta instalado"; return }
@@ -401,6 +450,7 @@ switch ($Accion) {
     "detener"    { Paso-Detener }
     "reparar"    { Paso; if (Test-Entorno) { Bien "nada que reparar" } else { Paso-Entorno "qwen2.5:7b" } }
     "tarea"      { Paso-Tarea }
+    "comandos"   { Paso-Comandos }
     "logs" {
         foreach ($f in @("kynikos.log","kynikos.err.log")) {
             $ruta = Join-Path $repo $f
