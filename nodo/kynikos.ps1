@@ -301,29 +301,52 @@ function Paso-Arrancar {
 }
 
 function Paso-Validar {
-    Paso "Validacion contra Telegram"
-    $h = Leer-Env
-    $token = $h["TELEGRAM_TOKEN"]
-    for ($i = 1; $i -le 9; $i++) {
-        $r = Invoke-Telegram $token "getUpdates?timeout=0&limit=1"
-        if (-not $r.ok -and $r.codigo -eq 409) {
-            Write-Host ""
-            Write-Host "  ===============================================" -ForegroundColor Green
-            Bien "VALIDADO: el nodo esta escuchando a Telegram"
-            Write-Host "  ===============================================" -ForegroundColor Green
-            Aviso "prueba final: escribe /estado a @kynicOS_robot"
-            return $true
-        }
-        Aviso "intento $i/9: nadie responde todavia..."
-        Start-Sleep -Seconds 10
+    Paso "Validacion"
+
+    # NO se usa getUpdates para validar. Dos motivos:
+    #  1) consume los mensajes del propio bot: cada consulta puede robarlos.
+    #  2) mientras el bot procesa un mensaje no esta en long-poll, asi que la
+    #     consulta devuelve 200 y parece que nadie escucha. Ese falso negativo
+    #     ya nos paso con el bot respondiendo "hi" en el log.
+    # Se comprueba lo que de verdad importa: proceso vivo, puerto escuchando y
+    # la linea de polling en el log, sin errores de autenticacion.
+    $log = Join-Path $repo "kynikos.log"
+    $ok = $false
+    $motivo = ""
+
+    for ($i = 1; $i -le 6; $i++) {
+        $vivo = Nodo-Vivo
+        $puerto = -not (Test-PuertoLibre $script:puerto)
+        $texto = ""
+        if (Test-Path $log) { $texto = (Get-Content $log -Tail 200 -Encoding UTF8) -join "`n" }
+        $escucha = $texto -match "polling started"
+        $error401 = $texto -match "Unauthorized|401"
+        $error409 = $texto -match "Conflict|409"
+
+        if ($vivo -and $puerto -and $escucha -and -not $error401) { $ok = $true; break }
+
+        if ($error401) { $motivo = "el token del .env es rechazado (401)"; break }
+        if ($error409) { $motivo = "hay otra instancia haciendo polling (409)"; break }
+        Aviso "intento $i/6: levantando (puerto:$puerto polling:$escucha)"
+        Start-Sleep -Seconds 5
     }
-    Mal "el proceso vive pero Telegram no confirma que escuche"
-    foreach ($f in @("kynikos.err.log", "kynikos.log")) {
-        $ruta = Join-Path $repo $f
-        if ((Test-Path $ruta) -and (Get-Item $ruta).Length -gt 0) {
-            Write-Host "   --- $f ---" -ForegroundColor DarkGray
-            Get-Content $ruta -Tail 15 -Encoding UTF8 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
-        }
+
+    if ($ok) {
+        Write-Host ""
+        Write-Host "  ===============================================" -ForegroundColor Green
+        Bien "VALIDADO: el nodo esta escuchando a Telegram"
+        Write-Host "  ===============================================" -ForegroundColor Green
+        Aviso "prueba final: escribe /estado a @kynicOS_robot"
+        Aviso "actividad en vivo:  .\nodo\kynikos.ps1 logs"
+        return $true
+    }
+
+    Mal "el nodo no esta escuchando"
+    if ($motivo) { Aviso "causa probable: $motivo" }
+    $ruta = Join-Path $repo "kynikos.err.log"
+    if ((Test-Path $ruta) -and (Get-Item $ruta).Length -gt 0) {
+        Write-Host "   --- kynikos.err.log ---" -ForegroundColor DarkGray
+        Get-Content $ruta -Tail 15 -Encoding UTF8 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
     }
     return $false
 }
