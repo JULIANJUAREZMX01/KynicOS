@@ -42,18 +42,43 @@ Bien "Repositorio al día."
 
 # ---------------------------------------------------------------- 3. Requisitos
 Titulo "3/6 · Comprobar requisitos"
-$faltan = @()
-foreach ($p in @("git", "python", "ollama")) {
-    if (-not (Get-Command $p -ErrorAction SilentlyContinue)) { $faltan += $p }
+
+function Actualizar-Ruta {
+    # Recarga el PATH de esta ventana para ver lo recien instalado sin cerrarla.
+    $maquina = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $usuario = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$maquina;$usuario"
+    # Ollama se instala por usuario y a veces no entra al PATH hasta reiniciar.
+    $ollamaDir = Join-Path $env:LOCALAPPDATA "Programs\Ollama"
+    if ((Test-Path $ollamaDir) -and ($env:Path -notlike "*$ollamaDir*")) { $env:Path += ";$ollamaDir" }
 }
+
+$paquetes = [ordered]@{
+    git    = "Git.Git"
+    python = "Python.Python.3.12"
+    ollama = "Ollama.Ollama"
+}
+
+$faltan = @($paquetes.Keys | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+
 if ($faltan.Count -gt 0) {
-    Mal ("Falta: " + ($faltan -join ", "))
-    Info "Instálalos y vuelve a ejecutar este script:"
-    if ($faltan -contains "git")    { Info "  winget install --id Git.Git -e --source winget" }
-    if ($faltan -contains "python") { Info "  winget install --id Python.Python.3.12 -e" }
-    if ($faltan -contains "ollama") { Info "  winget install --id Ollama.Ollama -e" }
-    Info "Después cierra esta ventana y abre PowerShell de nuevo."
-    exit 1
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        Mal ("Falta: " + ($faltan -join ", ") + " y esta PC no tiene winget para instalarlos solo.")
+        Info "Instálalos a mano desde: git-scm.com, python.org y ollama.com, y vuelve a correr este script."
+        exit 1
+    }
+    foreach ($nombre in $faltan) {
+        Info "Instalando $nombre ($($paquetes[$nombre]))... puede tardar unos minutos."
+        & winget install --id $paquetes[$nombre] -e --silent --accept-package-agreements --accept-source-agreements 2>&1 |
+            ForEach-Object { if ($_ -match "Successfully|Correctamente|instalad|Found|Encontrado") { Info "  $_" } }
+    }
+    Actualizar-Ruta
+    $siguen = @($paquetes.Keys | Where-Object { -not (Get-Command $_ -ErrorAction SilentlyContinue) })
+    if ($siguen.Count -gt 0) {
+        Mal ("Se instalaron, pero esta ventana aún no los ve: " + ($siguen -join ", "))
+        Info "Cierra esta ventana, abre PowerShell de nuevo y ejecuta el mismo comando. Ya no hará falta instalar nada."
+        exit 1
+    }
 }
 Bien "git, python y ollama disponibles."
 
