@@ -224,7 +224,7 @@ function Invoke-Reporte {
   Write-Paso "repo: $($repo.branch) @ $($repo.commit) $(if($repo.dirty){'(con cambios sin commit)'}else{'(limpio)'})"
 
   $puerto = Test-Puerto $Port
-  Write-Paso "puerto $Port: $(if($puerto){'escuchando'}else{'cerrado'})"
+  Write-Paso "puerto ${Port}: $(if($puerto){'escuchando'}else{'cerrado'})"
 
   $api = if ($puerto) { Get-ApiEstado $Port } else { $null }
   Write-Paso "api/status: $(if($api){'responde'}else{'sin respuesta'})"
