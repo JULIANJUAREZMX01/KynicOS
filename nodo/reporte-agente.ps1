@@ -16,10 +16,10 @@
 param(
   [string]$RepoPath = (Get-Location).Path,
   [int]$Port = 8000,
-  [string]$AgentBaseUrl = 'https://app.base44.com/api/agents/69d1042a619569bfe891119e',
+  [string]$AgentBaseUrl = 'https://app.base44.com/api/agents/69cfdbf8f38ae270ee9fcf0d',
   [string]$ApiKey = $env:BASE44_AGENT_API_KEY,
   [string]$ConversationId = $env:BASE44_AGENT_CONVERSATION,
-  [string]$TaskName = 'KynicOS',
+  [string]$TaskName = 'KYNIKOS nodo',
   [switch]$SelfTest,
   [switch]$RunTests,
   [switch]$NoSend,
@@ -52,9 +52,9 @@ function Get-Repo {
 function Test-Puerto([int]$p) {
   $cliente = New-Object Net.Sockets.TcpClient
   try {
-    $cliente.Connect('127.0.0.1', $p)
-    $cliente.Close()
-    return $true
+    $conexion = $cliente.BeginConnect('127.0.0.1', $p, $null, $null)
+    if ($conexion.AsyncWaitHandle.WaitOne(1200)) { $cliente.EndConnect($conexion); $cliente.Close(); return $true }
+    return $false
   } catch {
     return $false
   } finally {
@@ -105,7 +105,9 @@ function Get-Pruebas {
   if (-not $RunTests) { return 'omitidas' }
   Push-Location $RepoPath
   try {
-    $salida = & python -m pytest -q 2>&1 | Select-Object -Last 5
+    $py = Join-Path $RepoPath '.venv\Scripts\python.exe'
+    if (-not (Test-Path $py)) { $py = 'python' }
+    $salida = & $py -m pytest -q 2>&1 | Select-Object -Last 5
     $texto = ($salida -join ' ').Trim()
     if ($texto -match '(\d+) (failed|error)') { return "fallan: $texto" }
     if ($texto -match 'passed') { return "ok: $texto" }
@@ -115,6 +117,36 @@ function Get-Pruebas {
   } finally {
     Pop-Location
   }
+}
+
+function Get-Nodo {
+  # Un PID o un estado "Ready" no prueban nada. Lo que prueba que el nodo
+  # atiende es el conflicto 409 de Telegram: solo ocurre si alguien mas esta
+  # consumiendo getUpdates, es decir, si el nodo esta escuchando de verdad.
+  $proc = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+          Where-Object { $_.CommandLine -like '*kynikos.py*run*' }
+  $pidNodo = ($proc | Select-Object -First 1).ProcessId
+  $telegram = $false
+  $detalle = 'sin token en .env'
+  $envFile = Join-Path $RepoPath '.env'
+  if (Test-Path $envFile) {
+    $linea = Get-Content $envFile | Where-Object { $_ -like 'TELEGRAM_TOKEN=*' } | Select-Object -First 1
+    if ($linea) {
+      $tok = ($linea -split '=', 2)[1].Trim()
+      if ($tok.Length -gt 10) {
+        try {
+          Invoke-RestMethod -Uri "https://api.telegram.org/bot$tok/getUpdates?timeout=0&limit=1" -TimeoutSec 15 | Out-Null
+          $detalle = 'nadie escucha (sin conflicto)'
+        } catch {
+          $codigo = $null
+          try { $codigo = $_.Exception.Response.StatusCode.value__ } catch { }
+          if ($codigo -eq 409) { $telegram = $true; $detalle = 'escuchando (409)' }
+          else { $detalle = "error de red o token: $codigo" }
+        }
+      }
+    }
+  }
+  [pscustomobject]@{ vivo = [bool]$proc; pid = $pidNodo; telegram = $telegram; detalle = $detalle }
 }
 
 function Send-AlAgente([string]$texto, [string]$rutaLog) {
@@ -170,6 +202,10 @@ function Invoke-Reporte {
   $vars = Get-Variables
   Write-Paso "variables: $($vars.total - $vars.faltan.Count)/$($vars.total) con valor; faltan: $(if($vars.faltan.Count){$vars.faltan -join ', '}else{'ninguna'})"
 
+  $nodo = Get-Nodo
+  Write-Paso "nodo: $(if($nodo.vivo){"proceso vivo (PID $($nodo.pid))"}else{'proceso ausente'})"
+  Write-Paso "telegram: $($nodo.detalle)"
+
   $tarea = Get-Tarea
   Write-Paso "tarea programada '$TaskName': $tarea"
 
@@ -183,6 +219,8 @@ function Invoke-Reporte {
   $partes += "api $(if($api){'ok'}else{'sin respuesta'})"
   $partes += "vars $($vars.total - $vars.faltan.Count)/$($vars.total)"
   if ($vars.faltan.Count) { $partes += "faltan $($vars.faltan -join ',')" }
+  $partes += "nodo $(if($nodo.vivo){'vivo'}else{'ausente'})"
+  $partes += "telegram $(if($nodo.telegram){'escuchando'}else{'mudo'})"
   $partes += "tarea $tarea"
   $partes += "pruebas $pruebas"
   $texto = $partes -join ' | '
