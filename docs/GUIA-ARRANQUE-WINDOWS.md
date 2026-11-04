@@ -152,23 +152,19 @@ Desde la terminal también puedes ver el estado del flujo sin mostrar nada sensi
 
 ## Paso 8 · Dejarlo arrancando solo (opcional)
 
-Si quieres que el nodo esté disponible cada vez que enciendas la PC, sin abrir la terminal a mano, registra una tarea al iniciar sesión:
+> **Solo cuando el paso 6 ya funcione a mano.** Si registras la tarea antes de que el nodo arranque, Windows mostrará `Ready` y creerás que está vivo, pero la tarea morirá al instante sin avisar. `Ready` no significa que esté corriendo.
 
 ```powershell
-$repo = "$HOME\Documents\KynicOS"
-$accion = New-ScheduledTaskAction -Execute "$repo\.venv\Scripts\python.exe" -Argument "cli\kynikos.py run" -WorkingDirectory $repo
-$disparo = New-ScheduledTaskTrigger -AtLogOn
-Register-ScheduledTask -TaskName "KYNIKOS nodo" -Action $accion -Trigger $disparo -Description "Nodo primario KYNIKOS" -Force
-Start-ScheduledTask -TaskName "KYNIKOS nodo"
+.\nodo\registrar-tarea.ps1
 ```
 
-Para quitarlo, si algún día estorba:
+El script se niega a registrar nada si falta el entorno o el `.env`, y después **espera 8 segundos y comprueba que el proceso siga vivo**. Si no lo está, te dice el código de error de Windows y cómo ver el fallo real.
+
+Para quitarlo:
 
 ```powershell
 Unregister-ScheduledTask -TaskName "KYNIKOS nodo" -Confirm:$false
 ```
-
-Ollama se instala como servicio y arranca con Windows por su cuenta, así que no hay que hacer nada extra por ese lado.
 
 ---
 
@@ -201,6 +197,7 @@ El segundo comando solo hace falta si cambiaron las dependencias. Ante la duda, 
 | Respuestas muy lentas | Modelo grande para el hardware | Usa `qwen2.5:7b`; el 14B baja a ~3 tokens por segundo |
 | `Conflict: can't use getUpdates with webhook active` | Quedó un webhook registrado de una prueba anterior | `curl "https://api.telegram.org/bot<TU_TOKEN>/deleteWebhook"` |
 | `ObjectNotFound: .\.venv\Scripts\python.exe` | El instalador no terminó o se saltó: el entorno `.venv` todavía no existe | Ejecuta `.\nodo\instalar.ps1` completo. **No** corras el paso de actualizar antes de instalar |
+| Tarea en `Ready` pero el bot no contesta | La tarea se registró sin entorno: arranca y muere al instante | Borra la tarea (`Unregister-ScheduledTask`), completa `instalar.ps1` y usa `.\nodo\registrar-tarea.ps1` |
 | Se corta solo | Windows suspendió la PC o se cerró la terminal | Usa la tarea del paso 8 |
 | No llega la notificación del doble paso | El chat con el bot no está iniciado | Escribe `/start` en `@kynicOS_robot` una vez |
 

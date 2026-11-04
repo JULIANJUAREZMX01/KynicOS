@@ -47,3 +47,11 @@ Se probó en la PC de destino y apareció un fallo que el análisis estático no
 - **Causa raíz doble:** (1) el instalador terminaba con `exit 0` al instalar Python u Ollama, con un mensaje fácil de pasar por alto, así que nunca creaba el `.venv`; (2) la guía listaba «Actualizar» como último paso y se ejecutó antes de haber instalado.
 - **Corrección:** `Actualizar-Ruta` recarga el PATH de la sesión tras `winget`, de modo que normalmente **ya no hace falta reabrir PowerShell**; si aun así no aparece el programa, el script sale con `exit 1` y un aviso en rojo en lugar de `exit 0`. Además hay una verificación dura al final: si no existe `.venv\Scripts\python.exe`, falla con aviso grande. La guía dejó la advertencia sobre el orden y una fila nueva en la tabla de problemas.
 - **Lección:** un `exit 0` en una ruta de «falta algo» es un éxito falso. Toda salida prematura de un instalador debe ser distinguible a simple vista.
+
+## Segundo hallazgo: la tarea en `Ready` que no corre
+
+Al fotografiar la pantalla se vio que la tarea programada se había registrado y mostraba `Ready`, pero el nodo no respondía (verificado por sondeo a Telegram: sin conflicto de `getUpdates`, mensajes aún sin consumir). La tarea apuntaba a un `.venv` inexistente y moría al arrancar sin dejar señal.
+
+- **Causa:** la guía daba el bloque de registro como paso suelto, sin exigir que el entorno existiera. `Ready` en el Programador de Tareas solo significa «registrada», no «ejecutándose».
+- **Corrección:** `nodo/registrar-tarea.ps1` se niega a registrar sin `.venv` y `.env`, añade reintentos automáticos, y **verifica que el proceso esté vivo** tras 8 segundos en lugar de fiarse del estado de la tarea.
+- **Lección:** una confirmación de la plataforma («Ready», «200 OK», «Registered») no es evidencia de que el servicio funcione. La evidencia es el comportamiento: aquí, que Telegram deje de acumular mensajes.
