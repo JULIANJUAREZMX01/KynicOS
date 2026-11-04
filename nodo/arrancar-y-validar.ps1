@@ -185,15 +185,20 @@ if ($yaCorre) {
 
 # ---------------------------------------------------------------- 6. Validación real
 Titulo "6/6 · Validar contra Telegram"
-# Si el nodo está haciendo polling, Telegram rechaza una segunda consulta
-# con error 409. Esa es la prueba de que alguien está escuchando de verdad.
+# Con el nodo haciendo polling, Telegram rechaza una segunda consulta con 409.
+# El modelo tarda en cargar, asi que se reintenta hasta 90 s antes de fallar.
 $vivo = $false
-try {
-    Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getUpdates?timeout=0&limit=1" -TimeoutSec 20 | Out-Null
-} catch {
-    $codigo = $null
-    try { $codigo = $_.Exception.Response.StatusCode.value__ } catch { }
-    if ($codigo -eq 409) { $vivo = $true }
+for ($intento = 1; $intento -le 9; $intento++) {
+    try {
+        Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getUpdates?timeout=0&limit=1" -TimeoutSec 15 | Out-Null
+        Info "  intento $intento/9: nadie responde todavia..."
+    } catch {
+        $codigo = $null
+        try { $codigo = $_.Exception.Response.StatusCode.value__ } catch { }
+        if ($codigo -eq 409) { $vivo = $true; break }
+        Info "  intento $intento/9: respuesta inesperada ($codigo)"
+    }
+    Start-Sleep -Seconds 10
 }
 
 if ($vivo) {
@@ -210,7 +215,15 @@ if ($vivo) {
     exit 0
 }
 
-Mal "El proceso está vivo, pero Telegram no reporta que alguien escuche."
-Info "Suele ser el token: revisa que sea el de @kynicOS_robot dentro de .env"
-Info "Log: $repo\kynikos.err.log"
+Mal "El proceso está vivo, pero Telegram no confirma que escuche."
+Info "Esto es lo último que escribió el nodo:"
+foreach ($f in @("kynikos.err.log", "kynikos.log")) {
+    $ruta = Join-Path $repo $f
+    if ((Test-Path $ruta) -and (Get-Item $ruta).Length -gt 0) {
+        Write-Host "   --- $f ---" -ForegroundColor DarkGray
+        Get-Content $ruta -Tail 15 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+    }
+}
+Info "Si arriba aparece 401 o Unauthorized, el token del .env no sirve."
+Info "Si aparece 409, hay otra ventana con el nodo abierto: ciérrala y repite."
 exit 1

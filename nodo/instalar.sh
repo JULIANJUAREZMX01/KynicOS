@@ -3,6 +3,12 @@
 # Uso:  bash nodo/instalar.sh
 # Deja el bot corriendo con modelo local (tokens ilimitados) y Telegram por polling.
 # No requiere exponer puertos ni pagar nada.
+if [ -n "${PSModulePath:-}" ]; then
+  echo "!! Este script es para Linux o macOS, no para Windows."
+  echo "!! En Windows ejecuta:  .\nodo\arrancar-y-validar.ps1"
+  exit 1
+fi
+
 set -euo pipefail
 
 echo "== KYNIKOS · nodo primario =="
