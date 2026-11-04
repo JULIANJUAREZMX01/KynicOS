@@ -73,3 +73,4 @@ odo\kynikos.ps1` y confirmar con
   mensajes al bot y fallaba mientras este procesaba uno.
 | 2026-11-04 | Nodo KynicOS | Unificacion: automatico.ps1 pasa a alias, se corrige $pid (variable de solo lectura) y CIM/netstat protegidos. Validado con pwsh real instalado en el sandbox. |
 | 2026-11-04 | Nodo KynicOS | Barrido: 9 formas de arrancar, 3 orquestadores y 6 documentos con comandos distintos. Se declara `kynikos.ps1` llave maestra única y `docs/ARRANQUE.md` fuente única (ADR-031). |
+| 2026-11-04 | Nodo KynicOS | ADR-032: una sola llave (alias a legacy/), evaluacion de capas visuales (panel web > rich > textual > ratatui) y el tunel queda condicionado a autenticacion previa. |
