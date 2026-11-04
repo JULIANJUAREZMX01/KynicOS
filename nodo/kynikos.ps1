@@ -35,6 +35,7 @@ Set-Location $repo
 $script:python = Join-Path $repo ".venv\Scripts\python.exe"
 $script:envFile = Join-Path $repo ".env"
 $script:tareaNombre = "KYNIKOS nodo"
+$script:puerto = if ($env:KYNIKOS_PORT) { [int]$env:KYNIKOS_PORT } else { 8000 }
 
 function Paso($t)  { Write-Host ""; Write-Host "== $t" -ForegroundColor Yellow }
 function Bien($t)  { Write-Host "   OK   $t" -ForegroundColor Green }
@@ -82,9 +83,28 @@ function Test-Entorno {
 }
 
 function Nodo-Vivo {
+    # Por linea de comandos...
     $p = Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
-         Where-Object { $_.CommandLine -like "*kynikos.py*run*" }
-    return $p
+         Where-Object { $_.CommandLine -like "*kynikos.py*run*" -or $_.CommandLine -like "*app.main*" }
+    if ($p) { return $p }
+    # ...y por puerto: una instancia lanzada por la tarea programada puede tener
+    # otra linea de comandos y seguir ocupando el 8000. Eso fue lo que tumbo el
+    # arranque con [Errno 10048].
+    foreach ($pid in (Get-ProcesoPuerto $script:puerto)) {
+        $q = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        if ($q) { return @([pscustomobject]@{ ProcessId = $pid; Name = $q.ProcessName }) }
+    }
+    return $null
+}
+
+function Get-ProcesoPuerto($puerto) {
+    $c = Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction SilentlyContinue
+    if ($c) { return @($c | Select-Object -ExpandProperty OwningProcess -Unique) }
+    return @()
+}
+
+function Test-PuertoLibre($puerto) {
+    return ((Get-ProcesoPuerto $puerto).Count -eq 0)
 }
 
 # ------------------------------------------------------------------ pasos
@@ -217,18 +237,41 @@ function Paso-Config($m) {
 }
 
 function Paso-Detener {
+    $ids = @()
     $p = Nodo-Vivo
-    if ($p) {
-        foreach ($x in $p) { Stop-Process -Id $x.ProcessId -Force -ErrorAction SilentlyContinue }
-        Start-Sleep -Seconds 2
-        Bien "nodo anterior detenido"
+    if ($p) { $ids += $p.ProcessId }
+    $ids += Get-ProcesoPuerto $script:puerto
+    $ids = @($ids | Where-Object { $_ } | Select-Object -Unique)
+
+    if ($ids.Count -eq 0) { return }
+
+    foreach ($id in $ids) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
+    # Esperar a que el socket quede libre: Windows tarda en soltarlo.
+    for ($i = 0; $i -lt 10; $i++) {
+        Start-Sleep -Seconds 1
+        if (Test-PuertoLibre $script:puerto) { break }
+    }
+    if (Test-PuertoLibre $script:puerto) { Bien "nodo anterior detenido; puerto $script:puerto libre" }
+    else {
+        Mal "el puerto $script:puerto sigue ocupado por el PID $((Get-ProcesoPuerto $script:puerto) -join ', ')"
+        Aviso "abre una consola como administrador y ejecuta:"
+        Aviso "  Stop-Process -Id $((Get-ProcesoPuerto $script:puerto) -join ',') -Force"
+        exit 1
     }
 }
 
 function Paso-Arrancar {
     Paso "Arranque"
     $p = Nodo-Vivo
-    if ($p) { Bien "ya estaba corriendo (PID $($p[0].ProcessId))"; return }
+    if ($p -and -not (Test-PuertoLibre $script:puerto)) {
+        Bien "ya estaba corriendo en el puerto $script:puerto (PID $($p[0].ProcessId)); no se duplica"
+        return
+    }
+    if (-not (Test-PuertoLibre $script:puerto)) {
+        Mal "el puerto $script:puerto esta ocupado por otro programa, no por el nodo"
+        Aviso "mata ese proceso o arranca con otro puerto:  `$env:KYNIKOS_PORT=8010"
+        exit 1
+    }
 
     if (Get-ScheduledTask -TaskName $script:tareaNombre -ErrorAction SilentlyContinue) {
         Stop-ScheduledTask -TaskName $script:tareaNombre -ErrorAction SilentlyContinue
@@ -247,7 +290,7 @@ function Paso-Arrancar {
         Mal "murio al arrancar; esto dijo:"
         foreach ($f in @($err, $log)) {
             if ((Test-Path $f) -and (Get-Item $f).Length -gt 0) {
-                Get-Content $f -Tail 15 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+                Get-Content $f -Tail 15 -Encoding UTF8 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
             }
         }
         exit 1
@@ -279,7 +322,7 @@ function Paso-Validar {
         $ruta = Join-Path $repo $f
         if ((Test-Path $ruta) -and (Get-Item $ruta).Length -gt 0) {
             Write-Host "   --- $f ---" -ForegroundColor DarkGray
-            Get-Content $ruta -Tail 15 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+            Get-Content $ruta -Tail 15 -Encoding UTF8 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
         }
     }
     return $false
@@ -340,7 +383,7 @@ switch ($Accion) {
             $ruta = Join-Path $repo $f
             if ((Test-Path $ruta) -and (Get-Item $ruta).Length -gt 0) {
                 Write-Host "   --- $f ---" -ForegroundColor DarkGray
-                Get-Content $ruta -Tail 25 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+                Get-Content $ruta -Tail 25 -Encoding UTF8 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
             }
         }
     }
