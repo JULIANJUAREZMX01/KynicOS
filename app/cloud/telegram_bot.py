@@ -149,6 +149,49 @@ async def reiniciar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_chat.send_message(f"No pude reiniciar: {e}")
 
 
+async def version(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Version local frente a la ultima publicada, sin tocar nada."""
+    import subprocess
+    from pathlib import Path
+
+    raiz = Path(__file__).resolve().parents[2]
+
+    def _git(*args):
+        try:
+            r = subprocess.run(["git", "-C", str(raiz), *args],
+                               capture_output=True, text=True, timeout=8)
+            return r.stdout.strip() if r.returncode == 0 else ""
+        except Exception:
+            return ""
+
+    local = _git("rev-parse", "--short", "HEAD") or "desconocido"
+    fecha = _git("log", "-1", "--format=%cd", "--date=short") or "?"
+    rama = _git("rev-parse", "--abbrev-ref", "HEAD") or "?"
+
+    remoto = "?"
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10) as cliente:
+            r = await cliente.get("https://api.github.com/repos/JULIANJUAREZMX01/KynicOS/commits/main")
+            if r.status_code == 200:
+                remoto = r.json()["sha"][:7]
+    except Exception:
+        remoto = "?"
+
+    if remoto in ("?", local):
+        estado = "no pude comprobar GitHub" if remoto == "?" else "estas en la ultima version"
+    else:
+        estado = f"hay una version nueva ({remoto}); corro /reiniciar tras actualizar"
+
+    texto = (
+        "<b>KYNIKOS · version</b>\n\n"
+        f"Local: <code>{local}</code> ({fecha}, rama {rama})\n"
+        f"Publicada: <code>{remoto}</code>\n"
+        f"Estado: {estado}"
+    )
+    await update.message.reply_text(texto, parse_mode="HTML")
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming messages with agent loop."""
     user = update.effective_user
@@ -221,6 +264,7 @@ async def start_telegram_bot(settings: Settings) -> None:
         _app.add_handler(CommandHandler("estado", estado))
         _app.add_handler(CommandHandler("modelo", modelo))
         _app.add_handler(CommandHandler("logs", logs))
+        _app.add_handler(CommandHandler("version", version))
         _app.add_handler(CommandHandler("id", mi_id))
         _app.add_handler(CommandHandler("reiniciar", reiniciar))
         _app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

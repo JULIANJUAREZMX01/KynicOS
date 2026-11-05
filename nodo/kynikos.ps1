@@ -124,15 +124,49 @@ function Test-PuertoLibre($puerto) {
 # ------------------------------------------------------------------ pasos
 function Paso-Repositorio {
     Paso "Repositorio"
-    if (Test-Path (Join-Path $repo ".git")) {
-        $antes = git rev-parse HEAD 2>$null
-        git pull -q --ff-only 2>$null | Out-Null
-        $despues = git rev-parse HEAD 2>$null
-        if ($antes -eq $despues) { Bien "ya estaba al dia" } else { Bien "actualizado a $($despues.Substring(0,7))" }
-    } else {
-        Mal "esta carpeta no es un repositorio git"
-        exit 1
+    if (-not (Test-Path (Join-Path $repo ".git"))) { Mal "esta carpeta no es un repositorio git"; exit 1 }
+
+    $ErrorActionPreference = "Continue"
+    git fetch -q origin 2>$null | Out-Null
+    $ErrorActionPreference = "Stop"
+
+    $local = (git rev-parse HEAD 2>$null)
+    $remoto = (git rev-parse "origin/main" 2>$null)
+    if (-not $remoto) { Aviso "sin conexion con GitHub; sigo con la version local"; return }
+    if ($local -eq $remoto) {
+        Bien ("ya en la ultima version (" + $local.Substring(0,7) + ")")
+        return
     }
+
+    $hay = (git rev-list --count "HEAD..origin/main" 2>$null)
+    $suyos = (git rev-list --count "origin/main..HEAD" 2>$null)
+    if ([int]$suyos -gt 0) {
+        Aviso ("tienes " + $suyos + " commit(s) locales sin subir; no toco nada")
+        Aviso "para actualizar sin perderlos:  git stash && git pull --ff-only && git stash pop"
+        return
+    }
+
+    Aviso ("hay " + $hay + " commit(s) nuevos; actualizando sin tocar .env ni .venv")
+    $ErrorActionPreference = "Continue"
+    git pull -q --ff-only 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+    $ErrorActionPreference = "Stop"
+    $nuevo = (git rev-parse HEAD 2>$null)
+    if ($nuevo -eq $local) { Aviso "no se pudo actualizar; sigo con la version local" }
+    else { Bien ("actualizado a " + $nuevo.Substring(0,7)) }
+}
+
+function Get-HuellaDeps {
+    # Huella de los requirements: si cambian, se reinstalan encima del entorno
+    # existente. Nunca se borra .venv: recrear el entorno en cada arranque es
+    # justo lo que rompia la instalacion.
+    $texto = ""
+    foreach ($r in @("requirements.txt", "requirements-bot.txt")) {
+        $ruta = Join-Path $repo $r
+        if (Test-Path $ruta) { $texto += (Get-Content $ruta -Raw) }
+    }
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($texto)
+    return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString("x2") }) -join "")
 }
 
 function Paso-Requisitos {
@@ -174,23 +208,33 @@ function Paso-Modelo {
 function Paso-Entorno($m) {
     Paso "Entorno de Python"
     if (-not (Test-Path $script:python)) {
-        Aviso "creando .venv"
+        Aviso "creando .venv (solo la primera vez)"
         & python -m venv .venv
         if (-not (Test-Path $script:python)) { Mal "no se creo .venv"; exit 1 }
     }
-    if (-not (Test-Entorno)) {
-        Aviso "instalando dependencias (tarda un poco)"
-        & $script:python -m pip install -q --upgrade pip 2>&1 | Out-Null
-        foreach ($r in @("requirements.txt", "requirements-bot.txt")) {
-            if (Test-Path (Join-Path $repo $r)) { & $script:python -m pip install -q -r $r 2>&1 | Out-Null }
-        }
-        if (-not (Test-Entorno)) {
-            Mal "faltan dependencias y no se pudieron instalar"
-            Aviso "prueba a mano para ver el error:"
-            Aviso "  .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-bot.txt"
-            exit 1
-        }
+
+    $sello = Join-Path $repo ".kynikos\deps.sha"
+    $huella = Get-HuellaDeps
+    $previa = ""
+    if (Test-Path $sello) { $previa = ((Get-Content $sello -Raw) -replace "\s", "") }
+
+    if ((Test-Entorno) -and ($previa -eq $huella)) {
+        Bien "entorno intacto y dependencias al dia"
+        return
     }
+
+    Aviso "instalando dependencias sobre el entorno existente (no se borra nada)"
+    & $script:python -m pip install -q --upgrade pip 2>&1 | Out-Null
+    foreach ($r in @("requirements.txt", "requirements-bot.txt")) {
+        if (Test-Path (Join-Path $repo $r)) { & $script:python -m pip install -q -r (Join-Path $repo $r) 2>&1 | Out-Null }
+    }
+    if (-not (Test-Entorno)) {
+        Mal "faltan dependencias y no se pudieron instalar"
+        Aviso "  .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-bot.txt"
+        exit 1
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path $sello) | Out-Null
+    $huella | Set-Content $sello
     Bien "entorno con telegram, loguru y httpx"
 }
 
@@ -378,6 +422,7 @@ function Paso-Comandos {
         @{ command = "estado";    description = "Salud del nodo: modelo, RAM, polling" },
         @{ command = "modelo";    description = "Modelo activo y contexto" },
         @{ command = "logs";      description = "Ultimas lineas del registro" },
+        @{ command = "version";   description = "Version local frente a la publicada" },
         @{ command = "id";        description = "Tu ID de Telegram" },
         @{ command = "reiniciar"; description = "Reinicia el bot" },
         @{ command = "ayuda";     description = "Lista de comandos" }
@@ -416,7 +461,13 @@ function Paso-Comandos {
 function Paso-Tarea {
     Paso "Arranque automatico"
     if (-not (Test-Path $script:python)) { Mal "el nodo no esta instalado"; return }
-    $accion = New-ScheduledTaskAction -Execute $script:python -Argument "cli\kynikos.py run" -WorkingDirectory $repo
+    # Al iniciar sesion no basta con lanzar el nodo: hay que comprobar version
+    # y dependencias. 'inicio' lo hace en segundos y no descarga nada nuevo.
+    $shell = (Get-Command powershell).Source
+    $guion = Join-Path $PSScriptRoot "kynikos.ps1"
+    $accion = New-ScheduledTaskAction -Execute $shell `
+        -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$guion`" inicio" `
+        -WorkingDirectory $repo
     $disparo = New-ScheduledTaskTrigger -AtLogOn
     $ajustes = New-ScheduledTaskSettingsSet -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
         -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
@@ -454,6 +505,21 @@ switch ($Accion) {
         $u = Test-Token (Leer-Env)["TELEGRAM_TOKEN"]
         if ($u) { Bien "token valido de @$u" } else { Aviso "sin token valido en .env" }
         if (Nodo-Vivo) { Bien "nodo corriendo" } else { Aviso "nodo detenido" }
+    }
+
+    # Verificacion de cada reinicio: actualiza si hay version nueva, revisa
+    # dependencias y arranca solo si hace falta. No borra .venv, ni .env, ni
+    # el modelo, ni la sesion.
+    "inicio" {
+        Paso-Repositorio
+        $m = "qwen2.5:7b"
+        $envActual = Leer-Env
+        if ($envActual.ContainsKey("OLLAMA_MODEL") -and $envActual["OLLAMA_MODEL"]) { $m = $envActual["OLLAMA_MODEL"] }
+        Paso-Entorno $m
+        if (-not (Test-Path $script:python)) { exit 1 }
+        if (Nodo-Vivo) { Bien "el nodo ya estaba corriendo; no se duplica" }
+        else { Paso-Arrancar }
+        if (Paso-Validar) { exit 0 } else { exit 1 }
     }
 
     "instalar"   { Paso-Requisitos; $m = Paso-Modelo; Paso-Entorno $m }
