@@ -474,11 +474,32 @@ function Paso-Tarea {
     Register-ScheduledTask -TaskName $script:tareaNombre -Action $accion -Trigger $disparo `
         -Settings $ajustes -Description "Nodo primario KYNIKOS" -Force | Out-Null
     Start-ScheduledTask -TaskName $script:tareaNombre
-    Start-Sleep -Seconds 8
-    if (Nodo-Vivo) { Bien "tarea registrada y nodo vivo al iniciar sesion" }
-    else {
-        Mal "la tarea se registro pero el nodo no arranco"
+
+    # 'inicio' hace fetch, comprueba dependencias y arranca: ocho segundos no
+    # alcanzan y el resultado es un falso "no arranco". Se espera de verdad.
+    $visto = $false
+    for ($i = 1; $i -le 24; $i++) {
+        Start-Sleep -Seconds 5
+        if (Nodo-Vivo) { $visto = $true; break }
+        if ($i % 3 -eq 0) { Aviso ("esperando al nodo... " + ($i * 5) + " s") }
+    }
+
+    if ($visto) {
+        Bien "tarea registrada y nodo vivo al iniciar sesion"
+    } else {
+        Mal "la tarea se registro pero el nodo no arranco en 120 s"
+        $info = Get-ScheduledTaskInfo -TaskName $script:tareaNombre -ErrorAction SilentlyContinue
+        if ($info) {
+            Aviso ("ultimo resultado de la tarea: " + $info.LastTaskResult + " (0 = sin error)")
+            Aviso ("ultima ejecucion: " + $info.LastRunTime)
+        }
+        $reg = Join-Path $repo "kynikos.err.log"
+        if (Test-Path $reg) {
+            Aviso "ultimas lineas del registro de errores:"
+            Get-Content $reg -Tail 8 -Encoding UTF8 | ForEach-Object { Write-Host "     $_" -ForegroundColor DarkGray }
+        }
         Aviso "pruebalo a mano:  & '$script:python' cli\kynikos.py run"
+        Aviso "y para ver el estado:  .\nodo\kynikos.ps1 estado"
     }
 }
 
