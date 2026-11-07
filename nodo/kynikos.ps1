@@ -70,10 +70,26 @@ function Invoke-Telegram($token, $metodo) {
     }
 }
 
+function Probar-Token($token) {
+    # Devuelve "ok:<usuario>", "invalido" o "sin_red".
+    # Antes, un fallo de red se pintaba igual que un token revocado y el estado
+    # decia "sin token valido" con el bot respondiendo en Telegram.
+    if ([string]::IsNullOrWhiteSpace($token)) { return "invalido" }
+    try {
+        $r = Invoke-RestMethod -Uri "https://api.telegram.org/bot$token/getMe" -TimeoutSec 12 -ErrorAction Stop
+        if ($r.ok) { return "ok:" + $r.result.username }
+        return "invalido"
+    } catch {
+        $codigo = 0
+        try { $codigo = [int]$_.Exception.Response.StatusCode } catch { }
+        if ($codigo -eq 401 -or $codigo -eq 404) { return "invalido" }
+        return "sin_red"
+    }
+}
+
 function Test-Token($token) {
-    if ([string]::IsNullOrWhiteSpace($token)) { return $null }
-    $r = Invoke-Telegram $token "getMe"
-    if ($r.ok) { return $r.result.username }
+    $r = Probar-Token $token
+    if ($r -like "ok:*") { return $r.Substring(3) }
     return $null
 }
 
@@ -207,6 +223,21 @@ function Get-CommitCargado {
     $f = Join-Path $repo ".kynikos\commit_cargado"
     if (Test-Path $f) { return ((Get-Content $f -Raw) -replace "\s", "") }
     return ""
+}
+
+function Test-CodigoDesfasado($procesoId) {
+    # Un sello en disco puede quedar viejo o escribirse de mas. La hora de
+    # arranque del proceso no miente: si el proceso nacio antes del ultimo
+    # commit, esta ejecutando codigo anterior, se ponga lo que se ponga en
+    # .kynikos/commit_cargado.
+    try {
+        $inicio = (Get-Process -Id $procesoId -ErrorAction Stop).StartTime
+        $epoch = 0
+        try { $epoch = [int](git -C $repo log -1 --format=%ct HEAD 2>$null) } catch { }
+        if ($epoch -le 0) { return $false }
+        $commit = [DateTimeOffset]::FromUnixTimeSeconds($epoch).LocalDateTime
+        return ($inicio -lt $commit)
+    } catch { return $false }
 }
 
 function Set-CommitCargado($c) {
@@ -653,15 +684,18 @@ switch ($Accion) {
     "estado" {
         Paso "Estado del nodo"
         if (Test-Entorno) { Bien "entorno completo" } else { Aviso "entorno incompleto" }
-        $u = Test-Token (Leer-Env)["TELEGRAM_TOKEN"]
-        if ($u) { Bien "token de @$u" } else { Mal "sin token valido" }
         $p = Nodo-Vivo
+        $t = Probar-Token (Leer-Env)["TELEGRAM_TOKEN"]
+        if ($t -like "ok:*") { Bien ("token de @" + $t.Substring(3)) }
+        elseif ($p) { Bien "token sin verificar ahora, pero el nodo esta polleando: el token sirve" }
+        elseif ($t -eq "sin_red") { Aviso "no pude comprobar el token: sin salida a Telegram en este momento" }
+        else { Mal "token invalido en .env" }
         if ($p) {
             Bien "corriendo (PID $($p[0].ProcessId))"
             $cargado = Get-CommitCargado
             $actual = Get-CommitActual
-            if ($cargado -and $actual -and ($cargado -ne $actual)) {
-                Aviso ("corre " + $cargado + " pero el repositorio esta en " + $actual)
+            if (Test-CodigoDesfasado $p[0].ProcessId) {
+                Aviso ("el proceso arranco antes del ultimo commit (" + $actual + ")")
                 Aviso "el bot sigue con codigo viejo; ejecuta: .\nodo\kynikos.ps1 reparar"
             }
         } else { Aviso "detenido" }
