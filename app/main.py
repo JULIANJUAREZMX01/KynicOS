@@ -193,6 +193,15 @@ async def status():
     settings = Settings()
     token = bool(getattr(settings, "telegram_token", ""))
     loop_vivo = _agent_loop is not None
+    # Canales y skills reales, no escritos a mano: whatsapp figuraba activo sin
+    # credenciales de Twilio y "concierge_llm" no existe como skill. Un endpoint
+    # de estado que miente no sirve para diagnosticar nada.
+    whatsapp_on = bool(os.getenv("TWILIO_ACCOUNT_SID") and os.getenv("TWILIO_AUTH_TOKEN"))
+    skills_dir = Path(__file__).parent / "skills"
+    skills = sorted(
+        p.stem for p in skills_dir.glob("*.py")
+        if not p.stem.startswith("_") and p.stem != "__init__"
+    )
     return JSONResponse({
         "status": "ok" if (loop_vivo and token) else "degradado",
         "version": "1.0.0",
@@ -204,11 +213,11 @@ async def status():
         "channels": [
             channel for channel, enabled in (
                 ("telegram", token),
-                ("whatsapp", True),
+                ("whatsapp", whatsapp_on),
             ) if enabled
         ],
-        "skills": ["hvac_triage", "mueve_cancun", "concierge_llm"],
-        "deploy_url": "https://nanobot-cloud-zjr0.onrender.com",
+        "skills": skills,
+        "deploy_url": os.getenv("KYNIKOS_DEPLOY_URL", ""),
     })
 
 

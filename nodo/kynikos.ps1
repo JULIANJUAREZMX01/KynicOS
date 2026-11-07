@@ -111,6 +111,12 @@ function Get-ProcesosNodo {
     return $lista
 }
 
+function Get-ServidoresNodo {
+    # Solo los que ejecutan el servidor. El lanzador (cli/kynikos.py) ya no
+    # existe como proceso aparte, pero se excluye por si queda alguno viejo.
+    return @(Get-ProcesosNodo | Where-Object { $_.CommandLine -match "app\.main" })
+}
+
 function Nodo-Vivo {
     # Por linea de comandos...
     $p = $null
@@ -472,7 +478,11 @@ function Paso-Arrancar {
 
     $log = Join-Path $repo "kynikos.log"
     $err = Join-Path $repo "kynikos.err.log"
-    $proc = Start-Process -FilePath $script:python -ArgumentList "cli\kynikos.py", "run" `
+    # Se lanza el servidor directamente. Antes se lanzaba 'cli\kynikos.py run',
+    # que a su vez hacia 'python -m app.main': dos procesos por arranque, con el
+    # PID del lanzador en pantalla y el del servidor en /api/status. De ahi
+    # venian los "dos procesos con la misma hora" que parecian duplicados.
+    $proc = Start-Process -FilePath $script:python -ArgumentList "-m", "app.main" `
         -WorkingDirectory $repo -RedirectStandardOutput $log -RedirectStandardError $err `
         -WindowStyle Hidden -PassThru
     Aviso "lanzado con PID $($proc.Id); el modelo tarda en cargar"
@@ -786,7 +796,7 @@ switch ($Accion) {
         elseif ($t -eq "sin_red") { Aviso "no pude comprobar el token: sin salida a Telegram en este momento" }
         else { Mal "token invalido en .env" }
         if ($p) {
-            $todos = @(Get-ProcesosNodo)
+            $todos = @(Get-ServidoresNodo)
             Bien "corriendo (PID $($p[0].ProcessId))"
             if ($todos.Count -gt 1) {
                 Mal ("hay " + $todos.Count + " procesos del nodo: " + (($todos | ForEach-Object { $_.ProcessId }) -join ", "))
