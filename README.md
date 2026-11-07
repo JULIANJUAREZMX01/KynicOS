@@ -158,7 +158,7 @@ AgentContext
    ↓
 ConciergeAgentLoop
    ↓
-SkillRouter
+deteccion de skill (HVAC / MueveCancun)
    ↓
 HVAC Triage
    ↓
@@ -181,6 +181,8 @@ El objetivo de KynicOS es que esa cadena sea **repetible, observable, extensible
 
 KynicOS utiliza una arquitectura por capas en la que el LLM no constituye por sí mismo el sistema. El modelo razona dentro de un runtime que proporciona contexto, memoria, skills, proveedores y herramientas.
 
+Los nombres de este diagrama son los del código: las skills se detectan con reglas explícitas dentro de `ConciergeAgentLoop.process_message` (import directo de cada skill, sin enrutador genérico); la memoria se carga desde `workspace/memory/MEMORY.md` con `Memory.get_memory_context`; los proveedores los resuelve `ProviderManager` y las herramientas `ToolExecutor`.
+
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         KynicOS Runtime                          │
@@ -193,17 +195,17 @@ KynicOS utiliza una arquitectura por capas en la que el LLM no constituye por s�
 │              │                                                  │
 │      ┌───────┴────────┐                                         │
 │      ▼                ▼                                         │
-│  SkillRouter       MemoryInject                                 │
+│  Skills de dominio  Memory                                     │
 │      │                │                                         │
 │      └───────┬────────┘                                         │
 │              ▼                                                  │
-│          LLM Router                                             │
+│        ProviderManager                                          │
 │      ┌───────┼────────┐                                         │
 │      ▼       ▼        ▼                                         │
 │    Groq  Anthropic  Ollama                                     │
 │              │                                                  │
 │              ▼                                                  │
-│        Tool / Skill Parser                                      │
+│        ToolExecutor                                             │
 │              │                                                  │
 │       ┌──────┼───────────────┐                                  │
 │       ▼      ▼               ▼                                  │
@@ -422,7 +424,7 @@ Incoming message
       ↓
 Context update
       ↓
-SkillRouter
+Detector de skills
       │
       ├── Known operational intent
       │        ↓
