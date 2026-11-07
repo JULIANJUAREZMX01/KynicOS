@@ -657,11 +657,22 @@ switch ($Accion) {
             # La hora de arranque manda. El sello en .kynikos puede quedar viejo
             # o escribirse de mas; ya paso: decia estar al dia con un PID que no
             # se habia reiniciado.
-            $inicio = (Get-Process -Id $vivo[0].ProcessId -ErrorAction SilentlyContinue).StartTime
+            $pidViejo = $vivo[0].ProcessId
+            $inicio = (Get-Process -Id $pidViejo -ErrorAction SilentlyContinue).StartTime
             Aviso ("el proceso arranco el " + $inicio + " y el ultimo commit es posterior (" + $actual + ")")
             Aviso "reiniciando para cargar el codigo nuevo"
             Paso-Detener
             Paso-Arrancar
+            $nuevo = Nodo-Vivo
+            if ($nuevo -and ($nuevo[0].ProcessId -ne $pidViejo)) {
+                Bien ("reiniciado de verdad: PID " + $pidViejo + " -> " + $nuevo[0].ProcessId)
+            } elseif ($nuevo) {
+                Mal ("el PID sigue siendo " + $pidViejo + ": el proceso viejo no murio")
+                Aviso "suele ser permisos o una ventana de consola que lo relanza"
+                Aviso "cierra esa ventana y ejecuta: .\nodo\kynikos.ps1 reiniciar (como administrador)"
+            } else {
+                Mal "el nodo no volvio a arrancar; revisa: .\nodo\kynikos.ps1 logs"
+            }
         } else {
             Bien ("el nodo ya corre la version " + $actual + "; nada que reparar")
         }
