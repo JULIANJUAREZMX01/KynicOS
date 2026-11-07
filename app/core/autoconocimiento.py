@@ -35,12 +35,47 @@ def _git(args: list[str], defecto: str = "-") -> str:
 
 
 def _ram_gb() -> str:
+    """RAM total sin depender de psutil.
+
+    En la PC del jefe /info decia "desconocida RAM" porque psutil no esta en el
+    entorno del nodo. Se lee del sistema: GlobalMemoryStatusEx en Windows,
+    /proc/meminfo en Linux.
+    """
     try:
         import psutil
         return f"{psutil.virtual_memory().total / 1024 ** 3:.1f} GB"
     except Exception:
-        return "desconocida"
+        pass
+    try:
+        if os.name == "nt":
+            import ctypes
 
+            class _Memoria(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            m = _Memoria()
+            m.dwLength = ctypes.sizeof(_Memoria)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m)):
+                return f"{m.ullTotalPhys / 1024 ** 3:.1f} GB"
+        else:
+            with open("/proc/meminfo", encoding="utf-8") as f:
+                for linea in f:
+                    if linea.startswith("MemTotal:"):
+                        kb = int(linea.split()[1])
+                        return f"{kb / 1024 ** 2:.1f} GB"
+    except Exception:
+        pass
+    return "desconocida"
 
 def _hay(clave: str) -> bool:
     return bool(os.getenv(clave, "").strip())
