@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/unt-logo.png" alt="UNT · United North Team" width="200">
+</p>
+
 # KynicOS
 
 **Un asistente de IA que corre en tu propia máquina.**

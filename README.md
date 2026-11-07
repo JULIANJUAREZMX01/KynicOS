@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/unt-logo.png" alt="UNT · United North Team" width="180">
+</p>
+
 # KynicOS 🐕
 
 **Asistente operativo de Julián Juárez — UNT Tecnologías Computacionales Cancún**
