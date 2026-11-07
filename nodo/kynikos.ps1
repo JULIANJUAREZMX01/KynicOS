@@ -99,6 +99,18 @@ function Test-Entorno {
     return ($LASTEXITCODE -eq 0)
 }
 
+function Get-ProcesosNodo {
+    # Todos los python que ejecutan este nodo, no solo el que gano el puerto.
+    # Telegram admite UNA sola instancia por token: un duplicado sin puerto
+    # sigue haciendo polling, recibe 409 y deja al bot mudo por ratos.
+    $lista = @()
+    try {
+        $lista = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
+            Where-Object { $_.CommandLine -and ($_.CommandLine -match "kynikos\.py|app\.main|cli[\\/]kynikos") })
+    } catch { }
+    return $lista
+}
+
 function Nodo-Vivo {
     # Por linea de comandos...
     $p = $null
@@ -390,6 +402,9 @@ function Paso-Detener {
     $p = Nodo-Vivo
     if ($p) { $ids += $p.ProcessId }
     $ids += Get-ProcesoPuerto $script:puerto
+    # Los duplicados que no tienen el puerto ni coinciden con Nodo-Vivo seguian
+    # vivos haciendo polling: dos instancias y Telegram corta a una.
+    foreach ($proc in (Get-ProcesosNodo)) { $ids += [int]$proc.ProcessId }
     $ids = @($ids | Where-Object { $_ } | Select-Object -Unique)
 
     if ($ids.Count -eq 0) { return }
@@ -399,6 +414,11 @@ function Paso-Detener {
     for ($i = 0; $i -lt 10; $i++) {
         Start-Sleep -Seconds 1
         if (Test-PuertoLibre $script:puerto) { break }
+    }
+    $restantes = @(Get-ProcesosNodo)
+    if ($restantes.Count -gt 0) {
+        Mal ("quedan " + $restantes.Count + " proceso(s) del nodo sin morir: " + (($restantes | ForEach-Object { $_.ProcessId }) -join ", "))
+        Aviso "ejecuta como administrador y reintenta: .\nodo\kynikos.ps1 reiniciar"
     }
     if (Test-PuertoLibre $script:puerto) { Bien "nodo anterior detenido; puerto $script:puerto libre" }
     else {
@@ -709,7 +729,13 @@ switch ($Accion) {
         elseif ($t -eq "sin_red") { Aviso "no pude comprobar el token: sin salida a Telegram en este momento" }
         else { Mal "token invalido en .env" }
         if ($p) {
+            $todos = @(Get-ProcesosNodo)
             Bien "corriendo (PID $($p[0].ProcessId))"
+            if ($todos.Count -gt 1) {
+                Mal ("hay " + $todos.Count + " procesos del nodo: " + (($todos | ForEach-Object { $_.ProcessId }) -join ", "))
+                Aviso "Telegram solo admite una instancia por token; el bot responde a ratos"
+                Aviso "ejecuta: .\nodo\kynikos.ps1 reiniciar"
+            }
             $cargado = Get-CommitCargado
             $actual = Get-CommitActual
             if (Test-CodigoDesfasado $p[0].ProcessId) {

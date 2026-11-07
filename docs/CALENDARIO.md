@@ -90,3 +90,4 @@ odo\kynikos.ps1` y confirmar con
 - README reescrito con estado verificado, 6 skills, canales/conectores y roadmap por plazos
 - Nodo operativo en commit 66da6ef, con /info y reinicio garantizado
 - Próximos pasos: proteger /api/status, /instalar en el bot, triaje de seguridad en KYNYKOS_AI_Agent
+| 2026-11-06 | Nodo KynicOS | "El bot no responde": dos procesos del nodo (13644 y 21748) peleando por el mismo token de Telegram (409). Paso-Detener ahora mata todos los procesos del nodo y estado avisa de duplicados. ADR-038. |
