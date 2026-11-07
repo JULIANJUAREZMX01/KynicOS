@@ -64,9 +64,11 @@
     <h2>Nodo</h2>
     <div id="cfg">
       <input id="urlNodo" placeholder="URL del nodo, ej. http://192.168.1.10:8000">
+      <input id="tokenNodo" type="password" placeholder="Token del nodo (KYNIKOS_API_TOKEN)" autocomplete="off">
       <button id="guardar" type="button">Guardar y comprobar</button>
+      <button id="olvidar" type="button">Olvidar token</button>
     </div>
-    <small>El nodo es tu PC con Ollama. Sin ella encendida, la consola queda en modo local.</small>
+    <small>El nodo es tu PC con Ollama. El token vive en este navegador y viaja solo a tu nodo; sin el, la API de estado responde 401.</small>
   </section>
 </main>
 
@@ -147,22 +149,62 @@ estadoRed();
 // ---------- nodo ----------
 const urlInput = document.getElementById('urlNodo');
 const estadoNodo = document.getElementById('estadoNodo');
+const tokenInput = document.getElementById('tokenNodo');
 urlInput.value = localStorage.getItem('kynikos_url') || '';
+tokenInput.value = localStorage.getItem('kynikos_token') || '';
+
+// El token no se manda a nadie salvo al nodo configurado.
+function cabeceras(extra) {
+  const h = Object.assign({}, extra || {});
+  const t = localStorage.getItem('kynikos_token');
+  if (t) h['X-Kynikos-Token'] = t;
+  return h;
+}
+
 async function comprobarNodo() {
   const base = (localStorage.getItem('kynikos_url') || '').replace(/\/$/, '');
   if (!base) { estadoNodo.textContent = 'nodo: sin configurar'; estadoNodo.className = 'pill'; return; }
+
+  // /api/health es publico: dice si el nodo vive, sin revelar nada.
   try {
-    const r = await fetch(base + '/api/telegram/salud', { signal: AbortSignal.timeout(4000) });
+    const h = await fetch(base + '/api/health', { signal: AbortSignal.timeout(5000) });
+    if (!h.ok) throw new Error('health ' + h.status);
+  } catch {
+    estadoNodo.textContent = 'nodo: inalcanzable';
+    estadoNodo.className = 'pill off';
+    return;
+  }
+
+  // /api/status exige token: si falta o es incorrecto, se dice claramente.
+  try {
+    const r = await fetch(base + '/api/status', { headers: cabeceras(), signal: AbortSignal.timeout(6000) });
+    if (r.status === 401) {
+      estadoNodo.textContent = 'nodo: falta token';
+      estadoNodo.className = 'pill off';
+      return;
+    }
+    if (r.status === 503) {
+      estadoNodo.textContent = 'nodo: API cerrada';
+      estadoNodo.className = 'pill off';
+      return;
+    }
     const d = await r.json();
     estadoNodo.textContent = 'nodo: ' + (d.persona || 'activo');
     estadoNodo.className = 'pill on';
   } catch {
-    estadoNodo.textContent = 'nodo: inalcanzable';
-    estadoNodo.className = 'pill off';
+    estadoNodo.textContent = 'nodo: vivo, estado ilegible';
+    estadoNodo.className = 'pill';
   }
 }
+
 document.getElementById('guardar').onclick = () => {
   localStorage.setItem('kynikos_url', urlInput.value.trim());
+  localStorage.setItem('kynikos_token', tokenInput.value.trim());
+  comprobarNodo();
+};
+document.getElementById('olvidar').onclick = () => {
+  localStorage.removeItem('kynikos_token');
+  tokenInput.value = '';
   comprobarNodo();
 };
 
@@ -189,10 +231,15 @@ form.onsubmit = async (ev) => {
   try {
     const r = await fetch(base + '/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: cabeceras({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ mensaje: contenido }),
       signal: AbortSignal.timeout(300000),
     });
+    if (r.status === 401) {
+      esperando.remove();
+      pintar('sys', 'El nodo pide token: escríbelo en la sección Nodo y pulsa Guardar.');
+      return;
+    }
     const d = await r.json();
     esperando.remove();
     const respuesta = d.respuesta || d.content || d.error || '(sin respuesta)';
