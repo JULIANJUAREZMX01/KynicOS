@@ -1,5 +1,6 @@
 """KynicOS — Pydantic Settings"""
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -70,6 +71,16 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     port: int = 8000
     host: str = "0.0.0.0"
+
+    @field_validator("max_tokens_salida", mode="after")
+    @classmethod
+    def _salida_heredada(cls, valor: int) -> int:
+        """768 es el default de la version anterior y en CPU son minutos de silencio.
+
+        Si el .env todavia lo trae se reduce a 320; cualquier otro valor se
+        respeta tal cual, y KYNIKOS_MAX_SALIDA sigue mandando por encima.
+        """
+        return 320 if valor == 768 else valor
 
     class Config:
         env_file = ".env"

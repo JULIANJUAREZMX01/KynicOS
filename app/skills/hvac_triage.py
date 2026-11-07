@@ -4,6 +4,7 @@ Diagnóstico técnico de sistemas de aire acondicionado (Fan & Coil)
 Basado en manuales Carrier/Trane/York. Diferenciador clave vs competencia.
 """
 
+import re
 from typing import Dict, List, Tuple
 
 
@@ -80,7 +81,7 @@ HVAC_KNOWLEDGE_BASE: Dict[str, Dict] = {
         ],
         "prioridad": "baja",
         "eta_minutos": 60,
-    }
+    },
 }
 
 # Mapa de palabras clave → síntoma
@@ -103,6 +104,14 @@ KEYWORD_MAP = {
     "apagado": "no_enciende",
     "temperatura": "temperatura_no_baja",
     "no baja": "temperatura_no_baja",
+    # Ya existia "gotea_agua": se reutiliza en vez de duplicar el conocimiento.
+    "goteo": "gotea_agua",
+    "goteando": "gotea_agua",
+    "fuga": "gotea_agua",
+    "fuga de agua": "gotea_agua",
+    "tira agua": "gotea_agua",
+    "chorrea": "gotea_agua",
+    "escurre": "gotea_agua",
     "no llega": "temperatura_no_baja",
 }
 
@@ -114,9 +123,18 @@ def detect_hvac_issue(message: str) -> Tuple[str, Dict]:
     """
     msg_lower = message.lower()
     
-    # Verificar si el mensaje es sobre el AC
-    hvac_keywords = ["aire", "ac", "a/c", "clima", "acondicionado", "frio", "frío", "cooling", "hvac"]
-    is_hvac = any(kw in msg_lower for kw in hvac_keywords)
+    # Verificar si el mensaje es sobre el AC.
+    # "ac" se busca como palabra completa: como subcadena daba falsos positivos
+    # ("hace ruido" contiene "ac" en h-a-c-e) y ademas se colaba cualquier frase.
+    is_hvac = (
+        re.search(r"\b(ac|a/c|hvac)\b", msg_lower) is not None
+        or any(kw in msg_lower for kw in (
+            "aire", "clima", "acondicionado", "frio", "frío", "cooling",
+            "minisplit", "split", "gotea", "goteo", "fuga",
+            # sintomas que el huesped dice sin nombrar el equipo
+            "enfría", "enfria", "calor", "templado", "ventila",
+        ))
+    )
     
     if not is_hvac:
         return None, None

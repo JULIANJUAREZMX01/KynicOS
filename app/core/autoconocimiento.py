@@ -99,7 +99,11 @@ def datos() -> dict:
     return {
         "modelo": os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
         "contexto": os.getenv("OLLAMA_NUM_CTX", "4096"),
-        "salida_max": os.getenv("MAX_TOKENS_SALIDA", "768"),
+        # 768 es el default viejo y en CPU son minutos de silencio: la ficha muestra
+        # el valor efectivo, no el que quedo escrito en un .env antiguo.
+        "salida_max": (lambda v: "320" if v == "768" else v)(
+            os.getenv("KYNIKOS_MAX_SALIDA") or os.getenv("MAX_TOKENS_SALIDA") or "320"
+        ),
         "motor": os.getenv("OLLAMA_URL", "http://127.0.0.1:11434"),
         "proveedores": proveedores,
         "canales": canales,
@@ -115,7 +119,14 @@ def datos() -> dict:
         "repo": REPO,
         "autor": AUTOR,
         "ruta": str(RAIZ),
-        "skills": ["hvac_triage", "mueve_cancun"],
+        # Leidas del disco: antes eran dos escritas a mano y la ficha mentia
+        # cuando se agregaban skills nuevas.
+        "skills": sorted(
+            f.stem for f in (RAIZ / "app" / "skills").glob("*.py")
+            if not f.stem.startswith("_")
+        ),
+        "portafolio": "https://julianjuarezmx01.github.io",  # verificado 200 el 7-nov
+        "github": "https://github.com/JULIANJUAREZMX01",
     }
 
 
@@ -138,6 +149,14 @@ def bloque_sistema() -> str:
             f"- Modelo: {d['modelo']} por Ollama (Ollama es el motor). Contexto {d['contexto']} tokens, salida {d['salida_max']}.\n"
             f"- Stack: Python {d['python']}, FastAPI, python-telegram-bot. SO: {d['so']}.\n"
             f"- Codigo: {d['repo']} rama {d['rama']}, commit {d['commit']}.\n"
+            f"- Vives EN la maquina del jefe: {d['so']}, {d['ruta']}. Tienes acceso real: lees "
+            "logs/kynikos.log, workspace/memory/MEMORY.md, sesiones y el codigo; ejecutas git y el "
+            "script del nodo cuando el jefe lo pide; sirves el centro de mando en el puerto 8000 y la API.\n"
+            "- NUNCA digas que no tienes acceso al disco, que no puedes ejecutar comandos o que no "
+            "tienes interfaz: es falso y el jefe lo nota.\n"
+            "- Limites reales: no navegas internet por tu cuenta, el modelo corre en CPU sin GPU asi "
+            "que respondes lento, y solo obedeces a tu autor.\n"
+            f"- Portafolio verificado del jefe: {d.get('portafolio', '-')} · GitHub: {d.get('github', '-')}\n"
             "- Si te preguntan un dato tecnico que no este aqui, di que no lo tienes "
             "verificado y sugiere /info. Nunca inventes URLs, versiones ni repositorios.\n"
         )
@@ -163,10 +182,15 @@ def texto_para_usuario() -> str:
         f"<b>Maquina</b>: {d['so']} · {d['nucleos']} nucleos · {d['ram']} RAM",
         f"<b>Proveedores</b>: {', '.join(d['proveedores'])}",
         f"<b>Canales</b>: {', '.join(d['canales'])}",
-        f"<b>Skills</b>: {', '.join(d['skills'])}",
+        f"<b>Skills</b> ({len(d['skills'])}): {', '.join(d['skills'])}",
         "",
         f"<b>Repositorio</b>: {d['repo']}",
         f"<b>Version</b>: rama <code>{d['rama']}</code>, commit <code>{d['commit']}</code> del {d['commit_fecha']}",
         f"<b>Instalado en</b>: <code>{d['ruta']}</code>",
+        "",
+        "<b>Acceso real</b>: logs, memoria, sesiones, codigo, git y reinicio del nodo",
+        "<b>Limites</b>: sin GPU (respuestas lentas), no navega internet solo, un unico autorizado",
+        f"<b>Portafolio</b>: {d['portafolio']}",
+        f"<b>GitHub</b>: {d['github']}",
     ]
     return "\n".join(lineas)
