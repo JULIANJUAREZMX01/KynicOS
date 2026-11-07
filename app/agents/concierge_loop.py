@@ -45,7 +45,16 @@ class ConciergeAgentLoop(AgentLoop):
         if not ctx.messages:
             return self.persona.greeting
 
-        last_message = ctx.messages[-1].content if ctx.messages else ""
+        # Solo el ultimo mensaje del USUARIO. Si se mira el ultimo de la lista
+        # y ese es una respuesta previa del bot, la skill se realimenta: el
+        # bot habla de rutas, y su propia frase vuelve a activar la skill.
+        last_message = ""
+        for _m in reversed(ctx.messages):
+            if getattr(_m, "role", "user") == "user":
+                last_message = _m.content or ""
+                break
+        if not last_message and ctx.messages:
+            last_message = ctx.messages[-1].content or ""
         logger.info(f"[{self.persona.name}] Procesando: {last_message[:60]}...")
 
         # ── Skill 1: HVAC Triage ─────────────────────────────

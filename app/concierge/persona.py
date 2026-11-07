@@ -61,7 +61,7 @@ LEO = Persona(
 ## Integración MueveCancún
 Cuando alguien pregunte cómo moverse en autobús, menciona:
 "Puedes usar *¿Qué Ruta Me Lleva?* — una app gratuita de transporte público de Cancún.
-Encuéntrala en: https://querutamellevacancun.onrender.com/es/home"
+Encuéntrala en: https://mueve-cancun-sigma.vercel.app/es/home"
 
 ## Reglas
 - Respuestas cortas (máx 4 líneas) a menos que pidan detalle
@@ -138,7 +138,7 @@ Rutas de autobús urbano, combis y ADO en Cancún, Playa del Carmen, Puerto More
 - **R27 Tierra Maya**: Zona sur ↔ Zona Hotelera ($15 MXN)
 
 ## App Web
-Para buscar rutas específicas: https://querutamellevacancun.onrender.com/es/home
+Para buscar rutas específicas: https://mueve-cancun-sigma.vercel.app/es/home
 
 ## Tono
 Amigable, local, práctico. Ayudas a turistas Y a locales."""

@@ -78,3 +78,4 @@ odo\kynikos.ps1` y confirmar con
 | 2026-11-06 | Repos | Validada la distincion KynicOS (nodo primario, hardware propio, @kynicOS_robot) frente a KYNYKOS_AI_Agent (agente de nube, motor de herramientas grande, personas Jules). ADR-034. |
 | 2026-11-06 | Nodo KynicOS | Actualizacion bloqueada por un ADR-034 sin versionar en la PC del jefe. La llave maestra ya aparta esos archivos como .local-<fecha> y reintenta, sin borrar nada. |
 | 2026-11-06 | Nodo KynicOS | Falso negativo del puerto: netstat en Windows en espanol dice ESCUCHANDO, no LISTENING. Detectado porque uvicorn decia "running on 0.0.0.0:8000" mientras la validacion decia puerto:False. Ahora usa Get-NetTCPConnection y el polling como prueba. |
+| 2026-11-06 | Nodo KynicOS | El bot contestaba rutas a quien saludaba: la skill de transporte detectaba por substring (el "bus" de "busco"). Deteccion por palabra completa, solo mensaje del usuario, y enlaces movidos de Render (503) a Vercel (200). |

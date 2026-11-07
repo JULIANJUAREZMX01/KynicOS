@@ -4,10 +4,11 @@ Cuando el huésped pregunta sobre transporte público, este skill
 proporciona información de rutas y enlaza con la PWA.
 """
 
+import re
 from typing import Optional, Dict
 
 
-APP_URL = "https://querutamellevacancun.onrender.com/es/home"
+APP_URL = "https://mueve-cancun-sigma.vercel.app/es/home"
 
 # Rutas más consultadas por turistas
 POPULAR_ROUTES = {
@@ -55,17 +56,36 @@ POPULAR_ROUTES = {
 
 # Keywords para detectar consultas de transporte
 TRANSPORT_KEYWORDS = [
-    "autobús", "autobus", "bus", "ruta", "transporte", "cómo llego", "como llego",
-    "cómo ir", "como ir", "llegar a", "ir a", "taxi", "combi", "ado", "colectivo",
-    "moverse", "moverte", "r1", "r2", "r10", "zona hotelera", "aeropuerto",
-    "playa del carmen", "tulum", "chichen", "centro cancun"
+    "autobus", "autobús", "camion", "camión", "combi", "colectivo", "ado",
+    "taxi", "ruta", "rutas", "transporte", "zona hotelera", "aeropuerto",
+    "playa del carmen", "tulum", "chichen", "chichén", "centro de cancun",
+    "como llego", "cómo llego", "como llegar", "cómo llegar",
+    "como ir", "cómo ir", "moverse", "moverte", "r1", "r2", "r10",
 ]
+
+_PATRON = None
+
+
+def _patron() -> "re.Pattern[str]":
+    """Palabra completa, no substring.
+
+    Antes era `kw in mensaje`, asi que 'busco un hotel' o 'buscar trabajo'
+    activaban la skill por el 'bus' de 'busco', y 'quiero ir a dormir' por
+    'ir a'. El bot contestaba con rutas de autobus a quien solo saludaba.
+    """
+    global _PATRON
+    if _PATRON is None:
+        alternativas = "|".join(re.escape(k) for k in TRANSPORT_KEYWORDS)
+        _PATRON = re.compile(
+            r"(?<![a-záéíóúñ])(" + alternativas + r")(?![a-záéíóúñ])",
+            re.IGNORECASE,
+        )
+    return _PATRON
 
 
 def is_transport_query(message: str) -> bool:
-    """Detecta si el mensaje es una consulta de transporte"""
-    msg_lower = message.lower()
-    return any(kw in msg_lower for kw in TRANSPORT_KEYWORDS)
+    """Detecta si el mensaje es una consulta de transporte."""
+    return bool(_patron().search((message or "").lower()))
 
 
 def get_route_info(message: str) -> Optional[Dict]:
