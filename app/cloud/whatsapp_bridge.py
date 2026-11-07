@@ -204,7 +204,8 @@ async def _download_media(media_url: str, auth_token: str, account_sid: str) -> 
 async def _process_with_agent(user_phone: str, text: str, media_url: Optional[str]) -> str:
     """Process an incoming WhatsApp message through the agent loop"""
     try:
-        from app.main import _agent_loop, _session_manager
+        from app.core.runtime import get_agent_loop as _get_loop, get_session_manager as _get_sessions
+        _agent_loop, _session_manager = _get_loop(), _get_sessions()
 
         if not _agent_loop:
             return "❌ Agent loop no iniciado"

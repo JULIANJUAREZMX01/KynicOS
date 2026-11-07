@@ -74,7 +74,10 @@ async def lifespan(app: FastAPI):
 
         if settings.telegram_token:
             logger.info("📱 Iniciando Telegram bot...")
-            telegram_task = asyncio.create_task(start_telegram_bot(settings))
+            # Un solo sitio de verdad para los canales: nada de `from app.main import`.
+            from app.core.runtime import set_runtime
+            set_runtime(_agent_loop, _session_manager)
+            telegram_task = asyncio.create_task(start_telegram_bot(settings, _agent_loop, _session_manager))
         else:
             logger.info("📱 Telegram deshabilitado: TELEGRAM_TOKEN no configurado")
 

@@ -209,7 +209,8 @@ async def whatsapp_webhook(request: Request):
 async def _process_whatsapp(phone: str, text: str) -> None:
     """Procesa mensaje WhatsApp con el agent loop."""
     try:
-        from app.main import _agent_loop, _session_manager
+        from app.core.runtime import get_agent_loop as _get_loop, get_session_manager as _get_sessions
+        _agent_loop, _session_manager = _get_loop(), _get_sessions()
         if not _agent_loop:
             return
 

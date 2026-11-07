@@ -10,6 +10,13 @@ from app.core.context import AgentContext
 
 logger = get_logger(__name__)
 _app: Optional[Application] = None
+# El loop y el session manager se INYECTAN al arrancar. Antes se importaban
+# desde app.main dentro del handler, pero con `python -m app.main` ese codigo
+# vive como __main__: el import creaba una segunda copia del modulo en la que
+# _agent_loop seguia en None, y todo mensaje libre respondia
+# "Agent loop no iniciado". Pasarlos por parametro elimina el import cruzado.
+_loop = None
+_sessions = None
 _arranque: Optional[float] = None
 
 
@@ -251,11 +258,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await message.chat.send_action("typing")
 
     try:
-        from app.main import _agent_loop, _session_manager
-        if not _agent_loop:
+        # Respaldo por si el canal arranco sin parametros: se lee el registro
+        # compartido, nunca `from app.main import`.
+        from app.core.runtime import get_agent_loop, get_session_manager
+        loop_vivo = _loop or get_agent_loop()
+        sesiones_vivas = _sessions or get_session_manager()
+        if not loop_vivo:
+            logger.error("Mensaje sin agent loop: el canal arranco sin inyectarlo ni registrarlo")
             await message.reply_text("❌ Agent loop no iniciado")
             return
-        if not _session_manager:
+        if not sesiones_vivas:
             await message.reply_text("❌ Session manager no iniciado")
             return
 
@@ -269,7 +281,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             )
 
         ctx.add_message("user", message.text)
-        response = await _agent_loop.process_message(ctx)
+        response = await loop_vivo.process_message(ctx)
         await _session_manager.save_session(ctx)
 
         if len(response) > 4096:
@@ -300,9 +312,13 @@ async def send_alert(message: str, settings: Settings) -> bool:
         return False
 
 
-async def start_telegram_bot(settings: Settings) -> None:
+async def start_telegram_bot(settings: Settings, agent_loop=None, session_manager=None) -> None:
     """Start Telegram bot."""
-    global _app
+    global _app, _loop, _sessions
+    _loop = agent_loop
+    _sessions = session_manager
+    if _loop is None:
+        logger.warning("⚠️  Telegram arranca sin agent loop: los mensajes libres no podran responder")
     logger.info("🟢 Starting Telegram bot polling...")
     try:
         _app = Application.builder().token(settings.telegram_token).build()
