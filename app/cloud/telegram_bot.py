@@ -272,7 +272,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             return
 
         session_id = f"telegram_{user.id}"
-        ctx = await _session_manager.load_session(session_id)
+        ctx = await sesiones_vivas.load_session(session_id)
         if not ctx:
             ctx = AgentContext(
                 session_id=session_id,
@@ -282,7 +282,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         ctx.add_message("user", message.text)
         response = await loop_vivo.process_message(ctx)
-        await _session_manager.save_session(ctx)
+        await sesiones_vivas.save_session(ctx)
 
         if len(response) > 4096:
             for i in range(0, len(response), 4096):
