@@ -535,7 +535,18 @@ def cmd_run(args) -> int:
     valores = leer_env()
     entorno = {**os.environ, **valores}
     print(f"Arrancando nodo con {valores.get('OLLAMA_MODEL', 'modelo por defecto')}…")
-    return subprocess.run([sys.executable, "-m", "app.main"], cwd=str(RAIZ), env=entorno).returncode
+
+    # execve SUSTITUYE este proceso; subprocess creaba un hijo. Con el hijo
+    # habia dos PIDs: el CLI y el servidor. El lanzador informaba el del CLI
+    # como 'el que atiende' (mentira: atendia el hijo) y al detener uno quedaba
+    # el otro vivo peleando el puerto y el long-poll de Telegram.
+    sys.stdout.flush()
+    try:
+        os.chdir(str(RAIZ))
+        os.execve(sys.executable, [sys.executable, "-m", "app.main"], entorno)
+    except OSError as e:
+        print(f"no pude sustituir el proceso ({e}); arranco como hijo")
+        return subprocess.run([sys.executable, "-m", "app.main"], cwd=str(RAIZ), env=entorno).returncode
 
 
 def cmd_status(args) -> int:
