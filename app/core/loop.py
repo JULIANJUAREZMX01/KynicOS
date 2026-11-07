@@ -18,6 +18,20 @@ logger = get_logger(__name__)
 class AgentLoop:
     """Main agent loop for processing user messages"""
 
+    def _max_salida(self) -> int:
+        """Tokens maximos de salida.
+
+        Ollama corre en la maquina del jefe, en CPU: a ~4 tokens por segundo un
+        limite alto no mejora la respuesta, la convierte en minutos de silencio
+        (y el default del proveedor era 8192). Se acota entre 64 y 1024 y se
+        puede subir sin tocar codigo con KYNIKOS_MAX_SALIDA en el .env.
+        """
+        crudo = os.getenv("KYNIKOS_MAX_SALIDA") or getattr(self.settings, "max_output_tokens", None)
+        try:
+            return max(64, min(1024, int(crudo)))
+        except (TypeError, ValueError):
+            return 320
+
     def __init__(self, settings: Settings, provider_manager: ProviderManager):
         self.settings = settings
         self.provider_manager = provider_manager
@@ -42,8 +56,11 @@ class AgentLoop:
             messages = self._format_messages(ctx)
 
             # Call LLM
-            logger.info(f"Calling LLM with {len(messages)} messages")
-            llm_response = await provider.call(messages)
+            limite = self._max_salida()
+            logger.info(f"Calling LLM with {len(messages)} messages (max {limite} tokens de salida)")
+            t0 = time.monotonic()
+            llm_response = await provider.call(messages, max_tokens=limite)
+            logger.info(f"LLM respondio en {time.monotonic() - t0:.1f}s")
 
             # Parse response
             response_text = llm_response.get("text", "")
@@ -64,7 +81,14 @@ class AgentLoop:
 
         except Exception as e:
             logger.error(f"Error processing message: {e}", exc_info=True)
-            error_msg = f"Disculpa, ocurrió un error: {str(e)[:100]}"
+            tipo = type(e).__name__
+            if "Timeout" in tipo or "timeout" in str(e).lower():
+                error_msg = ("⏳ El modelo local no respondió a tiempo. "
+                             "Sigue vivo, pero el equipo va lento: prueba con algo más corto "
+                             "o baja KYNIKOS_MAX_SALIDA en el .env.")
+                logger.error("Timeout del LLM: el modelo local no respondio a tiempo")
+            else:
+                error_msg = f"Disculpa, ocurrió un error: {str(e)[:100]}"
             ctx.add_message("assistant", error_msg, metadata={"error": True})
             return error_msg
 
