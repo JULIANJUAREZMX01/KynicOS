@@ -1,87 +1,82 @@
+"""Video de la marca JAJA.DEV: capas separadas, layout ya validado."""
+import sys; sys.path.insert(0, 'brand_jaja')
+from marca import recortar_emblema, FUENTE, TURQ, BLANCO, FONDO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
-import numpy as np, os, math, subprocess
+import math, os, shutil
 
+shutil.rmtree('brand_jaja/frames', ignore_errors=True)
 os.makedirs('brand_jaja/frames', exist_ok=True)
-BASE = Image.open('brand_jaja/out/jaja-dev-logo.png').convert('RGB')
-W = 1080
-TURQ = (45, 226, 230); BLANCO = (245, 255, 255)
-FUENTE = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
-L = 720  # se renderiza a 720 y ffmpeg escala a 1080
-base = BASE.resize((L, L), Image.LANCZOS)
-emblema = Image.open('brand_jaja/out/jaja-dev-logo.png').convert('RGB').crop((150, 90, 930, 870)).resize((580,580), Image.LANCZOS)
+L = 810                      # se renderiza a 810 y ffmpeg escala a 1080
+ESC = L / 1080.0
+FPS, DUR = 30, 6.0
+N = int(FPS * DUR)
 
-FPS = 30
-DUR = 6.0
-N = int(FPS*DUR)
+# --- capas a resolucion de trabajo ---
+em = recortar_emblema('brand_jaja/emblema_v2.png')
+tam = int(1080 * 0.52 * ESC)
+emblema = em.resize((tam, tam), Image.LANCZOS)
 
-def suave(t):
-    return t*t*(3-2*t)
+# texto en capa aparte
+capa_txt = Image.new('RGBA', (L, L), (0, 0, 0, 0))
+d = ImageDraw.Draw(capa_txt)
+f_nombre = ImageFont.truetype(FUENTE, int(124 * ESC))
+f_lema = ImageFont.truetype(FUENTE, int(37 * ESC))
+y_nombre, y_linea, y_lema = int(812*ESC), int(905*ESC), int(999*ESC)
+d.text((L//2, y_nombre), 'JAJA.DEV', font=f_nombre, fill=BLANCO, anchor='mm')
+ancho_linea = int(420 * ESC)
+d.line((L//2-ancho_linea//2, y_linea, L//2+ancho_linea//2, y_linea), fill=TURQ, width=max(2, int(3*ESC)))
+d.text((L//2, y_lema), 'SOFTWARE · SECURITY · AUTOMATION', font=f_lema, fill=TURQ, anchor='mm')
+
+ey = int(108 * ESC)   # 0.10 * L
+# verificar que el texto no toca el emblema
+assert ey + tam <= y_nombre - int(62*ESC), "emblema y nombre se solapan"
+print(f"layout: emblema {ey}..{ey+tam} | nombre y={y_nombre} | lema y={y_lema} | lienzo {L}")
 
 def clamp01(x): return max(0.0, min(1.0, x))
+def suave(t): return t*t*(3-2*t)
 
 for i in range(N):
     t = i / FPS
-    # fondo con halo que respira
-    img = Image.new('RGB', (L, L), (12, 18, 20))
-    halo = Image.new('RGBA', (L, L), (0,0,0,0))
-    hd = ImageDraw.Draw(halo)
+    img = Image.new('RGB', (L, L), FONDO)
+    # halo que respira
     pulso = 0.5 + 0.5*math.sin(t*2.2)
-    radio = 250 + 22*pulso
-    hd.ellipse((L/2-radio, L/2-radio, L/2+radio, L/2+radio), fill=(20, 120, 120, int(45+35*pulso)))
-    halo = halo.filter(ImageFilter.GaussianBlur(60))
-    img = Image.alpha_composite(img.convert('RGBA'), halo).convert('RGB')
+    halo = Image.new('RGBA', (L, L), (0,0,0,0))
+    r = int((250 + 25*pulso) * ESC)
+    cx, cy = L//2, int(L*0.36)
+    ImageDraw.Draw(halo).ellipse((cx-r, cy-r, cx+r, cy+r), fill=(20,120,120,int(45+35*pulso)))
+    img = Image.alpha_composite(img.convert('RGBA'), halo.filter(ImageFilter.GaussianBlur(int(55*ESC)))).convert('RGB')
 
-    # 0.0-1.4s: emblema entra con zoom y fade
-    p = clamp01((t-0.15)/1.25)
+    # emblema: entra con zoom y fade (0.2-1.5s)
+    p = clamp01((t-0.2)/1.3)
     if p > 0:
         e = suave(p)
-        tam = int(430 + 150*e)
-        ee = emblema.resize((tam, tam), Image.LANCZOS)
-        alfa = int(255*e)
+        s = int(tam * (0.86 + 0.14*e))
+        ee = emblema.resize((s, s), Image.LANCZOS).convert('RGBA')
         capa = Image.new('RGBA', (L, L), (0,0,0,0))
-        capa.paste(ee.convert('RGBA'), ((L-tam)//2, (L-tam)//2 - 70))
-        capa.putalpha(capa.split()[3].point(lambda v: v*alfa//255))
+        capa.paste(ee, ((L-s)//2, ey + (tam-s)//2))
+        capa.putalpha(capa.split()[3].point(lambda v: v*int(255*e)//255))
         img = Image.alpha_composite(img.convert('RGBA'), capa).convert('RGB')
 
-    # 1.2-2.6s: barrido de luz vertical
-    ps = clamp01((t-1.15)/1.4)
+    # barrido de luz (1.4-2.8s)
+    ps = clamp01((t-1.4)/1.4)
     if 0 < ps < 1:
-        y = int(-200 + (L+400)*suave(ps))
+        y = int(-120 + (L+240)*suave(ps))
         banda = Image.new('RGBA', (L, L), (0,0,0,0))
-        bd = ImageDraw.Draw(banda)
-        bd.rectangle((0, y-90, L, y+90), fill=(90, 255, 255, 46))
-        banda = banda.filter(ImageFilter.GaussianBlur(28))
-        img = Image.alpha_composite(img.convert('RGBA'), banda).convert('RGB')
+        ImageDraw.Draw(banda).rectangle((0, y-70, L, y+70), fill=(90,255,255,42))
+        img = Image.alpha_composite(img.convert('RGBA'), banda.filter(ImageFilter.GaussianBlur(int(26*ESC)))).convert('RGB')
 
-    # 2.2-3.4s: nombre
-    pn = clamp01((t-2.15)/1.15)
-    if pn > 0:
-        capa = Image.new('RGBA', (L, L), (0,0,0,0))
-        cd = ImageDraw.Draw(capa)
-        f = ImageFont.truetype(FUENTE, 82)
-        alfa = int(255*suave(pn))
-        cd.text((L/2, L-150), 'JAJA.DEV', font=f, fill=BLANCO+(alfa,), anchor='mm')
+    # texto completo entra (2.4-3.8s), sin trocear lineas
+    pt = clamp01((t-2.4)/1.4)
+    if pt > 0:
+        capa = capa_txt.copy()
+        capa.putalpha(capa.split()[3].point(lambda v: v*int(255*suave(pt))//255))
         img = Image.alpha_composite(img.convert('RGBA'), capa).convert('RGB')
 
-    # 3.2-4.2s: linea y lema
-    pl = clamp01((t-3.15)/1.05)
-    if pl > 0:
-        capa = Image.new('RGBA', (L, L), (0,0,0,0))
-        cd = ImageDraw.Draw(capa)
-        e = suave(pl)
-        ancho = int(340*e)
-        cd.line((L/2-ancho, L-98, L/2+ancho, L-98), fill=TURQ+(int(255*e),), width=3)
-        f2 = ImageFont.truetype(FUENTE, 24)
-        cd.text((L/2, L-62), 'S O F T W A R E  ·  S E C U R I T Y  ·  A U T O M A T I O N',
-                font=f2, fill=TURQ+(int(255*e),), anchor='mm')
-        img = Image.alpha_composite(img.convert('RGBA'), capa).convert('RGB')
-
-    # cierre: fundido final suave
+    # cierre en fundido
     if t > 5.55:
         k = (t-5.55)/0.45
-        img = Image.blend(img, Image.new('RGB',(L,L),(12,18,20)), 0.35*k)
+        img = Image.blend(img, Image.new('RGB',(L,L),FONDO), 0.30*k)
 
     img.save(f'brand_jaja/frames/f{i:04d}.png')
-
 print('frames:', N)
