@@ -76,3 +76,4 @@ odo\kynikos.ps1` y confirmar con
 | 2026-11-04 | Nodo KynicOS | ADR-032: una sola llave (alias a legacy/), evaluacion de capas visuales (panel web > rich > textual > ratatui) y el tunel queda condicionado a autenticacion previa. |
 | 2026-11-04 | Nodo KynicOS | Arranque idempotente (ADR-033): la tarea de inicio actualiza el repo, verifica dependencias por huella y arranca solo si hace falta. Nada se borra. Nuevo /version en el bot. |
 | 2026-11-06 | Repos | Validada la distincion KynicOS (nodo primario, hardware propio, @kynicOS_robot) frente a KYNYKOS_AI_Agent (agente de nube, motor de herramientas grande, personas Jules). ADR-034. |
+| 2026-11-06 | Nodo KynicOS | Actualizacion bloqueada por un ADR-034 sin versionar en la PC del jefe. La llave maestra ya aparta esos archivos como .local-<fecha> y reintenta, sin borrar nada. |

@@ -147,11 +147,40 @@ function Paso-Repositorio {
     }
 
     Aviso ("hay " + $hay + " commit(s) nuevos; actualizando sin tocar .env ni .venv")
+    $marca = Get-Date -Format "yyyyMMdd-HHmm"
     $ErrorActionPreference = "Continue"
-    git pull -q --ff-only 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor DarkGray }
+    $salida = (git pull --ff-only 2>&1 | Out-String)
+
+    # Un archivo sin versionar con el mismo nombre que uno del commit nuevo
+    # bloquea el avance: git no sobrescribe tu copia. Se aparta con otro nombre
+    # (no se borra) y se reintenta. Paso el 6-nov con ADR-034.
+    if ($salida -match "untracked working tree files would be overwritten") {
+        $choques = @()
+        $capturar = $false
+        foreach ($l in ($salida -split "`r?`n")) {
+            $t = $l.Trim()
+            if ($t -match "untracked working tree files would be overwritten") { $capturar = $true; continue }
+            if ($capturar) {
+                if ($t -eq "" -or $t -match "^(Please|Aborting|error:)") { break }
+                if (Test-Path (Join-Path $repo $t)) { $choques += $t }
+            }
+        }
+        foreach ($f in $choques) {
+            $destino = "$f.local-$marca"
+            try {
+                Move-Item -LiteralPath (Join-Path $repo $f) -Destination (Join-Path $repo $destino) -Force
+                Aviso ("apartado: " + $f + " -> " + $destino)
+            } catch { Aviso ("no pude apartar " + $f) }
+        }
+        if ($choques.Count -gt 0) { $salida = (git pull --ff-only 2>&1 | Out-String) }
+    }
+
     $ErrorActionPreference = "Stop"
     $nuevo = (git rev-parse HEAD 2>$null)
-    if ($nuevo -eq $local) { Aviso "no se pudo actualizar; sigo con la version local" }
+    if ($nuevo -eq $local) {
+        Aviso "no se pudo actualizar; sigo con la version local"
+        foreach ($l in ($salida -split "`r?`n")) { if ($l.Trim()) { Write-Host ("   " + $l.Trim()) -ForegroundColor DarkGray } }
+    }
     else { Bien ("actualizado a " + $nuevo.Substring(0,7)) }
 }
 
