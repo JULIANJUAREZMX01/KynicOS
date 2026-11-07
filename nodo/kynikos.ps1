@@ -499,7 +499,19 @@ function Paso-Arrancar {
     }
     New-Item -ItemType Directory -Force -Path (Join-Path $repo ".kynikos") | Out-Null
     $proc.Id | Set-Content (Join-Path $repo ".kynikos\nodo.pid")
-    Bien "proceso vivo (PID $($proc.Id))"
+    # El proceso lanzado tiene que ser el que atiende. Si no coincide, el nuevo
+    # murio (puerto ocupado) y el que responde es otro: la validacion pasaria
+    # igual y el arranque mentiria. Paso el 6-nov con 23848 en pantalla y 23632
+    # respondiendo la API.
+    Start-Sleep -Seconds 2
+    $vivo = Nodo-Vivo
+    if ($vivo -and ([int]$vivo[0].ProcessId -ne [int]$proc.Id)) {
+        Mal ("lance el PID " + $proc.Id + " pero atiende el " + $vivo[0].ProcessId)
+        Aviso "habia un proceso anterior que no murio; el lanzado no pudo tomar el puerto"
+        Aviso "ejecuta como administrador: .\nodo\kynikos.ps1 reiniciar"
+    } else {
+        Bien "proceso vivo (PID $($proc.Id)) y es el que atiende"
+    }
     Set-CommitCargado (Get-CommitActual)
 }
 
