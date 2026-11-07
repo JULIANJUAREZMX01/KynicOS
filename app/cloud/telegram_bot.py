@@ -247,6 +247,26 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(texto, parse_mode="HTML")
 
 
+
+async def _enviar_respuesta(message, texto: str) -> None:
+    """Envia la respuesta del modelo con formato.
+
+    Los modelos locales contestan en Markdown y Telegram sin parse_mode lo
+    muestra literal (### , **negrita**, [txt](url)). Se convierte a HTML de
+    Telegram; si Telegram rechazara el HTML (etiqueta partida al trocear), se
+    reenvia el trozo en texto plano para no perder nunca la respuesta.
+    """
+    from app.core.formato import md_a_html_telegram
+
+    texto = texto or "…"
+    for i in range(0, len(texto), 3500):
+        trozo = texto[i:i + 3500]
+        try:
+            await message.reply_text(md_a_html_telegram(trozo), parse_mode="HTML")
+        except Exception as e:
+            logger.warning(f"HTML rechazado por Telegram, se envia en texto plano: {e}")
+            await message.reply_text(trozo)
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming messages with agent loop."""
     user = update.effective_user
@@ -284,11 +304,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         response = await loop_vivo.process_message(ctx)
         await sesiones_vivas.save_session(ctx)
 
-        if len(response) > 4096:
-            for i in range(0, len(response), 4096):
-                await message.reply_text(response[i:i + 4096])
-        else:
-            await message.reply_text(response)
+        await _enviar_respuesta(message, response)
         logger.info(f"Response sent to {user.id}")
 
     except Exception as e:
