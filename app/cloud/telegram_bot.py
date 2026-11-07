@@ -22,11 +22,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         import os
+        from app.config import Settings
         from app.concierge.persona import get_persona
-        persona = get_persona(os.getenv("PERSONA", "leo"))
+
+        # Una sola fuente de verdad para la persona. Antes aqui se leia
+        # os.getenv("PERSONA", "leo") mientras /api/status leia
+        # os.getenv("PERSONA", Settings().persona): con el .env sin PERSONA,
+        # /start saludaba como Leo (concierge de hotel) y el status decia
+        # kynicos. Dos respaldos distintos para la misma variable.
+        persona = get_persona(os.getenv("PERSONA", Settings().persona))
         greeting = persona.greeting
     except Exception:
-        greeting = "Soy KynicOS, tu asistente. ¿En qué puedo ayudarte?"
+        greeting = "🛡️ KYNIKOS en línea. ¿Qué atacamos hoy, jefe?"
 
     await message.reply_text(f"Hola {user.first_name}! 👋\n\n{greeting}")
     logger.info(f"User {user.id} started KynicOS bot")
