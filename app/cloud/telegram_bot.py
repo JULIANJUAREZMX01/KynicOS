@@ -1,5 +1,6 @@
 """Telegram bot integration for KynicOS with Agent Loop."""
 
+import html
 from typing import Optional
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -69,6 +70,9 @@ async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/logs  — ultimas lineas del registro\n"
         "/id  — tu ID de Telegram\n"
         "/actualizar — trae el repo y reinicia el nodo desde aqui\n"
+        "/ecosistema — repos presentes en disco\n"
+        "/ecosistema_buscar texto — busca en repos permitidos\n"
+        "/ecosistema_leer repo ruta — lee un archivo de texto\n"
         "/reiniciar  — revisa si el polling esta vivo\n"
         "/ayuda  — esta lista\n\n"
         "Cualquier otro mensaje lo responde el agente."
@@ -345,6 +349,89 @@ async def _enviar_respuesta(message, texto: str) -> None:
             logger.warning(f"HTML rechazado por Telegram, se envia en texto plano: {e}")
             await message.reply_text(trozo)
 
+# ── Ecosistema de repositorios (solo lectura, solo el dueno) ────────────────
+
+def _es_dueno(update: Update) -> bool:
+    """Falla cerrado: sin TELEGRAM_USER_ID configurado, nadie pasa."""
+    try:
+        esperado = (Settings().telegram_user_id or "").strip()
+        usuario = update.effective_user
+        return bool(esperado and usuario and str(usuario.id) == esperado)
+    except Exception:
+        return False
+
+
+async def ecosistema(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Inventario de repositorios presentes en disco."""
+    # Expone rutas locales: tambien se reserva al dueno, no solo buscar/leer.
+    if not _es_dueno(update):
+        await update.message.reply_text("Comando reservado al dueno del nodo.")
+        return
+    try:
+        from app.core import ecosystem
+        # estado() ya viene en HTML de Telegram: se envia tal cual.
+        texto = ecosystem.estado()
+    except Exception as e:
+        logger.error(f"Error en /ecosistema: {e}", exc_info=True)
+        texto = f"No pude leer el ecosistema: {str(e)[:120]}"
+    try:
+        await update.message.reply_text(texto[:4000], parse_mode="HTML")
+    except Exception:
+        await update.message.reply_text(texto[:4000])
+
+
+async def ecosistema_buscar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Busca texto en los repos permitidos."""
+    if not _es_dueno(update):
+        await update.message.reply_text("Comando reservado al dueno del nodo.")
+        return
+    patron = " ".join(context.args or []).strip()
+    if len(patron) < 2:
+        await update.message.reply_text("Uso: /ecosistema_buscar texto")
+        return
+    try:
+        from app.core import ecosystem
+        hallazgos = ecosystem.buscar(patron, max_resultados=10)
+        if not hallazgos:
+            texto = f"Sin hallazgos para: {patron}"
+        else:
+            lineas = [f"<b>KYNIKOS · busqueda</b> <code>{html.escape(patron)}</code>", ""]
+            for h in hallazgos:
+                ubicacion = f"{h['repo']}/{h['archivo']}:{h['linea']}"
+                lineas.append(f"• <code>{html.escape(ubicacion)}</code>")
+                lineas.append(html.escape((h['texto'] or '').strip())[:220])
+            texto = "\n".join(lineas)
+    except Exception as e:
+        logger.error(f"Error en /ecosistema_buscar: {e}", exc_info=True)
+        texto = f"No pude buscar: {str(e)[:120]}"
+    await update.message.reply_text(texto[:4000], parse_mode="HTML")
+
+
+async def ecosistema_leer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Lee un archivo de texto permitido. El contenido va escapado dentro de <pre>."""
+    if not _es_dueno(update):
+        await update.message.reply_text("Comando reservado al dueno del nodo.")
+        return
+    if len(context.args or []) < 2:
+        await update.message.reply_text("Uso: /ecosistema_leer repo ruta/archivo.md")
+        return
+    clave = context.args[0]
+    ruta = " ".join(context.args[1:]).strip()
+    try:
+        from app.core import ecosystem
+        contenido = ecosystem.leer(clave, ruta, max_bytes=2500)
+        # Sin escapar, un '<' del archivo rompe el parseo de Telegram.
+        texto = (f"<b>{html.escape(clave)}/{html.escape(ruta)}</b>\n\n"
+                 f"<pre>{html.escape(contenido)}</pre>")
+    except Exception as e:
+        logger.error(f"Error en /ecosistema_leer: {e}", exc_info=True)
+        texto = f"No pude leer: {html.escape(str(e))[:160]}"
+    try:
+        await update.message.reply_text(texto[:4000], parse_mode="HTML")
+    except Exception:
+        await update.message.reply_text(texto[:4000])
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming messages with agent loop."""
     user = update.effective_user
@@ -461,6 +548,9 @@ async def start_telegram_bot(settings: Settings, agent_loop=None, session_manage
         _app.add_handler(CommandHandler("version", version))
         _app.add_handler(CommandHandler("instalar", instalar))
         _app.add_handler(CommandHandler("info", info))
+        _app.add_handler(CommandHandler("ecosistema", ecosistema))
+        _app.add_handler(CommandHandler("ecosistema_buscar", ecosistema_buscar))
+        _app.add_handler(CommandHandler("ecosistema_leer", ecosistema_leer))
         _app.add_handler(CommandHandler("id", mi_id))
         _app.add_handler(CommandHandler("reiniciar", reiniciar))
         _app.add_handler(CommandHandler("actualizar", actualizar))
