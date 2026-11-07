@@ -128,9 +128,9 @@ function Nodo-Vivo {
     # ...y por puerto: una instancia lanzada por la tarea programada puede tener
     # otra linea de comandos y seguir ocupando el 8000. Eso fue lo que tumbo el
     # arranque con [Errno 10048].
-    foreach ($pid in (Get-ProcesoPuerto $script:puerto)) {
-        $q = Get-Process -Id $pid -ErrorAction SilentlyContinue
-        if ($q) { return @([pscustomobject]@{ ProcessId = $pid; Name = $q.ProcessName }) }
+    foreach ($procId in (Get-ProcesoPuerto $script:puerto)) {
+        $q = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        if ($q) { return @([pscustomobject]@{ ProcessId = $procId; Name = $q.ProcessName }) }
     }
     return $null
 }
@@ -144,7 +144,9 @@ function Get-ProcesoPuerto($puerto) {
             $ids += [int]$c.OwningProcess
         }
     } catch { }
-    if ($ids.Count -gt 0) { return @($ids | Sort-Object -Unique) }
+    # OwningProcess 0 es el sistema, no un proceso matable: se descarta.
+    $ids = @($ids | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
+    if ($ids.Count -gt 0) { return @($ids) }
 
     # 2) netstat de respaldo. NO se busca 'LISTENING': en Windows en espanol
     #    el estado se llama 'ESCUCHANDO', y el detector devolvia vacio siempre
@@ -451,9 +453,20 @@ function Paso-Detener {
     }
     if (Test-PuertoLibre $script:puerto) { Bien "nodo anterior detenido; puerto $script:puerto libre" }
     else {
-        Mal "el puerto $script:puerto sigue ocupado por el PID $((Get-ProcesoPuerto $script:puerto) -join ', ')"
-        Aviso "abre una consola como administrador y ejecuta:"
-        Aviso "  Stop-Process -Id $((Get-ProcesoPuerto $script:puerto) -join ',') -Force"
+        $ocupantes = @(Get-ProcesoPuerto $script:puerto | Where-Object { $_ -gt 0 })
+        if ($ocupantes.Count -gt 0) {
+            Mal "el puerto $script:puerto sigue ocupado por el PID $($ocupantes -join ', ')"
+            Aviso "abre una consola como administrador y ejecuta:"
+            Aviso ("  Stop-Process -Id " + ($ocupantes -join ',') + " -Force")
+        } else {
+            # OwningProcess 0 = el sistema no nos deja ver quien es (o es la
+            # pila TCP). Nunca se sugiere matar el PID 0.
+            Mal "el puerto $script:puerto esta ocupado pero no puedo ver que proceso lo tiene"
+            Aviso "abre una consola como administrador y mira quien escucha ahi:"
+            Aviso ("  Get-NetTCPConnection -LocalPort " + $script:puerto + " -State Listen | Select-Object OwningProcess")
+            Aviso "si sale un PID concreto:  Stop-Process -Id <ese PID> -Force"
+            Aviso "si sigue sin aparecer, reinicia el equipo: es un socket del sistema"
+        }
         exit 1
     }
 }
