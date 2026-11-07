@@ -70,6 +70,53 @@ REPOS: dict[str, dict] = {
             "reporteros y listeners",
         ],
     },
+    "muevecancun": {
+        "github": "JULIANJUAREZMX01/MueveCancun",
+        "carpetas": ["MueveCancun", "muevecancun"],
+        "rol": "producto",
+        "aporta": [
+            "PWA de transporte publico de Cancun (Astro 5, offline-first)",
+            "motor de rutas en Rust/WASM y fallback JS",
+            "catalogo de rutas y API de journey",
+        ],
+    },
+    "cantabria": {
+        "github": "JULIANJUAREZMX01/cantabria-pms-demo",
+        "carpetas": ["cantabria-pms-demo", "cantabria"],
+        "rol": "operacion",
+        "aporta": [
+            "PMS del Hotel Cantabria: habitaciones, estancias, extras y solicitudes",
+            "funnel de reserva web con referencia CB-XXXXX",
+            "workflows de optimizacion semanal y estandar de agentes",
+        ],
+    },
+    "nanobot": {
+        "github": "JULIANJUAREZMX01/nanobot-cloud",
+        "carpetas": ["nanobot-cloud", "nanobot"],
+        "rol": "nube",
+        "aporta": [
+            "asistente en la nube y runbook de despliegue",
+            "patron de arranque para servicios remotos",
+        ],
+    },
+    "portafolio": {
+        "github": "sistemascancunjefe-ai/Portfolio_JAJA_DEV",
+        "carpetas": ["Portfolio_JAJA_DEV", "portafolio"],
+        "rol": "marca",
+        "aporta": [
+            "portafolio publico de Julian (JAJA.DEV)",
+            "presentacion de servicios de UNT Tecnologias Computacionales",
+        ],
+    },
+    "sanaciones": {
+        "github": "JULIANJUAREZMX01/sanaciones-cuanticas",
+        "carpetas": ["sanaciones-cuanticas", "sanaciones"],
+        "rol": "media",
+        "aporta": [
+            "motor de maquetacion automatizado de video",
+            "generacion de texto limpio sin solapamientos",
+        ],
+    },
 }
 
 # Artefactos que delatan qué ofrece un repositorio, para el catálogo.
