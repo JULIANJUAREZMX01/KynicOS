@@ -85,29 +85,34 @@ def datos() -> dict:
 
 
 def bloque_sistema() -> str:
-    """Bloque compacto para el system prompt.
+    """Version CORTA para el system prompt.
 
-    Se mantiene corto a proposito: el nodo trabaja con 4096 tokens de contexto
-    y este texto compite con la conversacion.
+    La ficha completa (/info) son 15 lineas; en el prompt cuesta ~900 tokens de
+    los 4096 disponibles en la maquina del jefe y deja al historial sin aire.
+    Aqui van solo los datos que evitan una alucinacion.
+
+    Las claves de datos() son planas: 'modelo' es texto, no un diccionario.
+    Se comprobo: asumir lo contrario lanzaba KeyError, el except devolvia "" y
+    el bot se quedaba sin ficha y volvia a inventar.
     """
-    d = datos()
-    return (
-        "\n\n== TU CONFIGURACION REAL (verificada, no inventar) ==\n"
-        f"- Eres KYNICOS, el nodo primario de {d['autor']}.\n"
-        f"- Modelo de lenguaje: {d['modelo']} por Ollama (Ollama es el motor, "
-        f"no el modelo). Contexto: {d['contexto']} tokens. Salida maxima: {d['salida_max']}.\n"
-        f"- Stack: Python {d['python']}, FastAPI, python-telegram-bot, loguru.\n"
-        f"- Sistema: {d['so']}, {d['nucleos']} nucleos, RAM {d['ram']}.\n"
-        f"- Codigo: {d['repo']} (rama {d['rama']}, commit {d['commit']}), en {d['ruta']}.\n"
-        f"- Proveedores LLM disponibles en orden: {', '.join(d['proveedores'])}.\n"
-        f"- Canales: {'; '.join(d['canales'])}.\n"
-        f"- Skills locales: {', '.join(d['skills'])}.\n"
-        "- SI tienes acceso al sistema donde corres: puedes leer archivos, ver "
-        "procesos y ejecutar skills. No digas lo contrario.\n"
-        "- Si te preguntan algo tecnico de ti mismo que no este aqui, di que no "
-        "lo tienes verificado; nunca inventes URLs, versiones ni repositorios.\n"
-    )
-
+    try:
+        d = datos()
+        return (
+            "\n\n== DATOS VERIFICADOS DE TI (no inventar) ==\n"
+            f"- Eres {d.get('nombre', 'KYNIKOS')}, asistente operativo de {d['autor']}.\n"
+            f"- Modelo: {d['modelo']} por Ollama (Ollama es el motor). Contexto {d['contexto']} tokens, salida {d['salida_max']}.\n"
+            f"- Stack: Python {d['python']}, FastAPI, python-telegram-bot. SO: {d['so']}.\n"
+            f"- Codigo: {d['repo']} rama {d['rama']}, commit {d['commit']}.\n"
+            "- Si te preguntan un dato tecnico que no este aqui, di que no lo tienes "
+            "verificado y sugiere /info. Nunca inventes URLs, versiones ni repositorios.\n"
+        )
+    except Exception:
+        # Nunca devolver vacio: sin ficha el modelo rellena el hueco inventando.
+        return (
+            "\n\n== DATOS VERIFICADOS DE TI ==\n"
+            "- Si no tienes un dato tecnico verificado, dilo. Nunca inventes URLs, "
+            "versiones ni repositorios. Puedes remitir a /info para la ficha real.\n"
+        )
 
 def texto_para_usuario() -> str:
     """Version legible del bloque, para el comando /info."""
