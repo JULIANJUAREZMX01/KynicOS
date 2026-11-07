@@ -7,10 +7,12 @@ cuando el modelo es local.
 
 from __future__ import annotations
 
+import secrets
+
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header, Query, Depends
 from pydantic import BaseModel
 
 from app.config.schema import Settings
@@ -36,7 +38,34 @@ def _s() -> Settings:
     return _settings
 
 
-@router.post("/api/chat")
+def _token_configurado() -> str:
+    try:
+        from app.config import Settings
+        return (getattr(Settings(), "kynikos_api_token", "") or "").strip()
+    except Exception:
+        return ""
+
+
+async def requiere_token_web(
+    x_kynikos_token: str = Header(default=""),
+    token: str = Query(default=""),
+):
+    """El chat web exige el token cuando el nodo esta configurado.
+
+    Al abrir el tunel, /api/chat quedaba accesible a cualquiera: un desconocido
+    podria conversar con el bot y gastar el modelo. Si no hay token configurado
+    se permite (nodo recien instalado, solo local); si lo hay, obliga.
+    """
+    esperado = _token_configurado()
+    if not esperado:
+        return True
+    recibido = (x_kynikos_token or token or "").strip()
+    if not recibido or not secrets.compare_digest(recibido, esperado):
+        raise HTTPException(status_code=401, detail="token requerido")
+    return True
+
+
+@router.post("/api/chat", dependencies=[Depends(requiere_token_web)])
 async def chat(peticion: Peticion) -> dict[str, Any]:
     """Responde con el modelo configurado (local primero)."""
     global _historial
@@ -69,12 +98,12 @@ async def chat(peticion: Peticion) -> dict[str, Any]:
         return {"error": f"{type(error).__name__}: {error}", "pista": "¿Ollama encendido y el modelo descargado?"}
 
 
-@router.get("/api/chat/historial")
+@router.get("/api/chat/historial", dependencies=[Depends(requiere_token_web)])
 async def historial() -> dict[str, Any]:
     return {"turnos": len(_historial), "mensajes": _historial[-MAX_TURNOS:]}
 
 
-@router.post("/api/chat/reiniciar")
+@router.post("/api/chat/reiniciar", dependencies=[Depends(requiere_token_web)])
 async def reiniciar() -> dict[str, Any]:
     global _historial
     _historial = []

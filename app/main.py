@@ -221,7 +221,7 @@ async def status():
     })
 
 
-@app.get("/api/persona")
+@app.get("/api/persona", dependencies=[Depends(requiere_token)])
 async def get_current_persona():
     persona = get_persona(os.getenv("PERSONA", Settings().persona))
     return {
