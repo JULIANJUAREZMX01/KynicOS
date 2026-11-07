@@ -21,12 +21,9 @@
 
 param(
     [Parameter(Position = 0)]
-    # "inicio" va aqui porque la tarea programada se registra como
-    # `kynikos.ps1 inicio` (ver Registrar-Arranque). El switch ya tenia su rama,
-    # pero al faltar en el ValidateSet PowerShell rechazaba el argumento antes
-    # de ejecutarla: la tarea encendia y moria sin arrancar el nodo.
-    [ValidateSet("auto", "inicio", "instalar", "configurar", "arrancar", "validar",
-                 "estado", "detener", "reparar", "reiniciar", "api", "tarea", "doctor", "logs", "comandos", "centro")]
+    [ValidateSet("auto", "instalar", "configurar", "arrancar", "validar",
+                 "estado", "detener", "reparar", "reiniciar", "api", "tarea", "doctor", "logs", "comandos", "centro",
+                 "inicio", "start", "up")]
     [string]$Accion = "auto",
 
     [string]$Modelo = "",
@@ -531,15 +528,34 @@ function Paso-Arrancar {
     # igual y el arranque mentiria. Paso el 6-nov con 23848 en pantalla y 23632
     # respondiendo la API.
     Start-Sleep -Seconds 2
-    $vivo = Nodo-Vivo
-    if ($vivo -and ([int]$vivo[0].ProcessId -ne [int]$proc.Id)) {
-        Mal ("lance el PID " + $proc.Id + " pero atiende el " + $vivo[0].ProcessId)
+    # Quien atiende lo dice el PUERTO, no la lista de procesos por linea de
+    # comandos: esa lista incluye huerfanos de arranques anteriores y su
+    # primer elemento es arbitrario, asi que el "es el que atiende" podia salir
+    # en verde con otro proceso sirviendo el 8000 (paso el 6-nov: 7576 en
+    # pantalla y 20616 atendiendo).
+    $duenio = @(Get-ProcesoPuerto $script:puerto)
+    if ($duenio.Count -gt 0 -and ($duenio -notcontains [int]$proc.Id)) {
+        Mal ("lance el PID " + $proc.Id + " pero el puerto $script:puerto lo atiende " + ($duenio -join ", "))
         Aviso "habia un proceso anterior que no murio; el lanzado no pudo tomar el puerto"
-        Aviso "ejecuta como administrador: .\nodo\kynikos.ps1 reiniciar"
-    } elseif ($vivo) {
-        Bien "proceso vivo (PID $($proc.Id)) y es el que atiende"
+        Aviso "limpialo:  Stop-Process -Id $($duenio -join ',') -Force"
+    } elseif ($duenio -contains [int]$proc.Id) {
+        Bien "proceso vivo (PID $($proc.Id)) y es el que atiende el puerto $script:puerto"
     } else {
         Aviso ("lance el PID " + $proc.Id + ", pero el puerto $script:puerto aun no responde")
+    }
+
+    # Huerfanos: procesos del nodo que no atienden ningun puerto. Son restos de
+    # arranques viejos; se avisan, no se matan solos.
+    $otros = @()
+    try {
+        $otros = @(Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction Stop |
+            Where-Object { $_.CommandLine -like "*kynikos.py*run*" -or $_.CommandLine -like "*app.main*" } |
+            ForEach-Object { [int]$_.ProcessId } |
+            Where-Object { $_ -ne [int]$proc.Id -and ($duenio -notcontains $_) })
+    } catch { }
+    if ($otros.Count -gt 0) {
+        Aviso ("huerfanos del nodo: " + ($otros -join ", "))
+        Aviso ("para limpiarlos:  Stop-Process -Id " + ($otros -join ",") + " -Force")
     }
     Set-CommitCargado (Get-CommitActual)
 }
@@ -723,7 +739,7 @@ switch ($Accion) {
     # Verificacion de cada reinicio: actualiza si hay version nueva, revisa
     # dependencias y arranca solo si hace falta. No borra .venv, ni .env, ni
     # el modelo, ni la sesion.
-    "inicio" {
+    { $_ -in @("inicio", "start", "up") } {
         Paso-Repositorio
         $m = "qwen2.5:7b"
         $envActual = Leer-Env
