@@ -239,6 +239,16 @@ try:
 except Exception as e:
     logger.warning(f"WhatsApp webhook no disponible: {e}")
 
+# Canal web: la consola PWA. Sin este include, la PWA llamaba a /api/chat,
+# recibia 404 y mostraba "(sin respuesta)" con el nodo perfectamente sano.
+try:
+    from app.channels.web_chat import router as web_chat_router
+
+    app.include_router(web_chat_router)
+    logger.info("✅ Chat web registrado en /api/chat")
+except Exception as e:
+    logger.warning(f"Chat web no disponible: {e}")
+
 try:
     from app.cloud.dashboard import create_dashboard_routes
     app.include_router(create_dashboard_routes(), prefix="/api")
