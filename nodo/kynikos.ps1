@@ -442,9 +442,22 @@ function Paso-Detener {
 
     foreach ($id in $ids) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue }
     # Esperar a que el socket quede libre: Windows tarda en soltarlo.
-    for ($i = 0; $i -lt 10; $i++) {
+    # El socket no siempre se suelta al instante: uvicorn tiene un proceso hijo y
+    # Windows deja el puerto en TIME_WAIT. Con 10s el jefe vio "puerto ocupado"
+    # y el reinicio siguiente funciono sin tocar nada. Se espera mas y, si el
+    # dueno es visible, se cierra solo: es el nodo anterior, no un invitado.
+    for ($i = 0; $i -lt 20; $i++) {
         Start-Sleep -Seconds 1
         if (Test-PuertoLibre $script:puerto) { break }
+        if ($i -eq 9) {
+            $duenos = @(Get-ProcesoPuerto $script:puerto | Where-Object { $_ -gt 0 })
+            foreach ($d in $duenos) {
+                try {
+                    Stop-Process -Id $d -Force -ErrorAction Stop
+                    Aviso "cerre el PID $d, que seguia reteniendo el puerto $script:puerto"
+                } catch { }
+            }
+        }
     }
     $restantes = @(Get-ProcesosNodo)
     if ($restantes.Count -gt 0) {

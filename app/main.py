@@ -129,6 +129,26 @@ web_path = Path(__file__).parent.parent / "web"
 if web_path.exists():
     app.mount("/static", StaticFiles(directory=web_path), name="static")
 
+    # El manifest y el service worker tienen que servirse desde la RAIZ. El
+    # navegador los pide en /manifest.webmanifest y /sw.js, y un service worker
+    # solo controla el ambito desde el que se sirve: bajo /static no cubriria
+    # nada. Estaban solo ahi, asi que la pagina pedia ambos en la raiz y el nodo
+    # devolvia 404 (visible en kynikos.log el 6-nov).
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    async def _manifest():
+        return FileResponse(
+            web_path / "manifest.webmanifest",
+            media_type="application/manifest+json",
+        )
+
+    @app.get("/sw.js", include_in_schema=False)
+    async def _service_worker():
+        return FileResponse(
+            web_path / "sw.js",
+            media_type="application/javascript",
+            headers={"Cache-Control": "no-cache"},
+        )
+
 
 @app.get("/")
 async def root():
