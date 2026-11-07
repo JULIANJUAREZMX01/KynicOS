@@ -22,7 +22,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("auto", "instalar", "configurar", "arrancar", "validar",
-                 "estado", "detener", "reparar", "tarea", "doctor", "logs", "comandos", "centro")]
+                 "estado", "detener", "reparar", "reiniciar", "tarea", "doctor", "logs", "comandos", "centro")]
     [string]$Accion = "auto",
 
     [string]$Modelo = "",
@@ -648,22 +648,29 @@ switch ($Accion) {
     "reparar"    {
         Paso "Reparacion"
         if (-not (Test-Entorno)) { Paso-Entorno "qwen2.5:7b" }
-        $cargado = Get-CommitCargado
         $actual = Get-CommitActual
         $vivo = Nodo-Vivo
-        if ($vivo -and $cargado -and $actual -and ($cargado -ne $actual)) {
-            Aviso ("el nodo corre " + $cargado + " y el repositorio esta en " + $actual)
+        if (-not $vivo) {
+            Aviso "el nodo no esta corriendo; arrancando"
+            Paso-Arrancar
+        } elseif (Test-CodigoDesfasado $vivo[0].ProcessId) {
+            # La hora de arranque manda. El sello en .kynikos puede quedar viejo
+            # o escribirse de mas; ya paso: decia estar al dia con un PID que no
+            # se habia reiniciado.
+            $inicio = (Get-Process -Id $vivo[0].ProcessId -ErrorAction SilentlyContinue).StartTime
+            Aviso ("el proceso arranco el " + $inicio + " y el ultimo commit es posterior (" + $actual + ")")
             Aviso "reiniciando para cargar el codigo nuevo"
             Paso-Detener
             Paso-Arrancar
-        } elseif ($vivo) {
-            Bien ("el nodo ya corre la version " + $actual + "; nada que reparar")
         } else {
-            Aviso "el nodo no esta corriendo; arrancando"
-            Paso-Arrancar
+            Bien ("el nodo ya corre la version " + $actual + "; nada que reparar")
         }
         if (Paso-Validar) { exit 0 } else { exit 1 }
     }
+
+    # Reinicio a la fuerza, sin diagnosticar nada. Para cuando el jefe quiere
+    # garantizar que el proceso vivo es el del codigo en disco.
+    "reiniciar"  { Paso-Detener; Paso-Arrancar; if (Paso-Validar) { exit 0 } else { exit 1 } }
     "tarea"      { Paso-Tarea }
     "comandos"   { Paso-Comandos }
     "centro" {
