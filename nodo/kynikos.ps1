@@ -21,7 +21,11 @@
 
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("auto", "instalar", "configurar", "arrancar", "validar",
+    # "inicio" va aqui porque la tarea programada se registra como
+    # `kynikos.ps1 inicio` (ver Registrar-Arranque). El switch ya tenia su rama,
+    # pero al faltar en el ValidateSet PowerShell rechazaba el argumento antes
+    # de ejecutarla: la tarea encendia y moria sin arrancar el nodo.
+    [ValidateSet("auto", "inicio", "instalar", "configurar", "arrancar", "validar",
                  "estado", "detener", "reparar", "reiniciar", "api", "tarea", "doctor", "logs", "comandos", "centro")]
     [string]$Accion = "auto",
 
