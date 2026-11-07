@@ -258,10 +258,14 @@ except Exception as e:
 
 if __name__ == "__main__":
     import uvicorn
+
     settings = Settings()
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.environment == "development",
-    )
+    # Con el nombre como texto ("app.main:app"), uvicorn importa el modulo por
+    # SEGUNDA vez: el bloque de nivel de modulo se ejecuta dos veces y se ve en
+    # los logs del nodo real ("Chat web registrado" repetido bajo `main` y bajo
+    # `app.main`), duplicando routers y la carga de personas. Pasando el objeto
+    # no hay reimportacion. El texto solo hace falta para el reload de desarrollo.
+    if settings.environment == "development":
+        uvicorn.run("app.main:app", host=settings.host, port=settings.port, reload=True)
+    else:
+        uvicorn.run(app, host=settings.host, port=settings.port)
