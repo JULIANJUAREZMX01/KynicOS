@@ -26,7 +26,8 @@ class AgentLoop:
         (y el default del proveedor era 8192). Se acota entre 64 y 1024 y se
         puede subir sin tocar codigo con KYNIKOS_MAX_SALIDA en el .env.
         """
-        crudo = os.getenv("KYNIKOS_MAX_SALIDA") or getattr(self.settings, "max_output_tokens", None)
+        crudo = (os.getenv("KYNIKOS_MAX_SALIDA")
+                 or getattr(self.settings, "max_tokens_salida", None))
         try:
             return max(64, min(1024, int(crudo)))
         except (TypeError, ValueError):

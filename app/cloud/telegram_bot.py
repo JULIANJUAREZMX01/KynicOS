@@ -68,11 +68,90 @@ async def ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/modelo  — modelo activo y ventana de contexto\n"
         "/logs  — ultimas lineas del registro\n"
         "/id  — tu ID de Telegram\n"
-        "/reiniciar  — reinicia el bot sin matar el proceso\n"
+        "/actualizar — trae el repo y reinicia el nodo desde aqui\n"
+        "/reiniciar  — revisa si el polling esta vivo\n"
         "/ayuda  — esta lista\n\n"
         "Cualquier otro mensaje lo responde el agente."
     )
     await update.message.reply_text(texto, parse_mode="HTML")
+
+
+async def actualizar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Trae el repo y reinicia el nodo, todo desde Telegram.
+
+    Matar el updater desde dentro del propio handler deja al bot mudo (paso el
+    6-nov). La salida segura: se lanza un proceso EXTERNO (kynikos.ps1 reiniciar)
+    desacoplado, con una espera para que este mensaje salga antes de que el
+    proceso viejo muera. El script valida que el nodo vuelva antes de dar OK, y
+    al arrancar el nodo nuevo avisa por Telegram: si no llega ese aviso, algo
+    fallo y hay que mirar la PC.
+    """
+    import asyncio
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    chat = update.effective_chat
+    repo = Path(__file__).resolve().parents[2]
+    await chat.send_message("🔄 Trayendo cambios del repositorio...")
+
+    def git(*args: str, limite: int = 90):
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=limite
+        )
+
+    try:
+        antes = git("rev-parse", "--short", "HEAD").stdout.strip()
+        git("fetch", "--quiet", "origin", "main")
+        merge = git("merge", "--ff-only", "origin/main")
+        despues = git("rev-parse", "--short", "HEAD").stdout.strip()
+    except subprocess.TimeoutExpired:
+        await chat.send_message("⛔ El repositorio no respondio a tiempo. No reinicio: el nodo sigue como estaba.")
+        return
+    except Exception as e:
+        await chat.send_message(f"⛔ No pude actualizar: {str(e)[:120]}\nEl nodo sigue como estaba.")
+        return
+
+    if merge.returncode != 0:
+        detalle = (merge.stderr or merge.stdout).strip()[:300]
+        await chat.send_message(
+            "⛔ <b>No actualicé</b>: el repo no avanzó en linea recta (hay cambios locales "
+            "o conflicto).\nNo reinicio para no dejarte sin nodo.\n\n"
+            f"<pre>{detalle}</pre>"
+        )
+        return
+
+    if antes == despues:
+        resumen = f"Sin cambios nuevos (sigo en <code>{antes}</code>)."
+    else:
+        resumen = f"Actualizado <code>{antes}</code> → <code>{despues}</code>."
+
+    await chat.send_message(f"✅ {resumen}\n\n🔁 Reiniciando el nodo... vuelvo en ~60s.")
+
+    # Proceso externo: sobrevive a la muerte de este. La espera da tiempo a que
+    # el mensaje anterior salga por Telegram antes de que maten este proceso.
+    guion = repo / "nodo" / "kynikos.ps1"
+    try:
+        if sys.platform == "win32":
+            orden = [
+                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                f"Start-Sleep -Seconds 5; & '{guion}' reiniciar",
+            ]
+            banderas = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            subprocess.Popen(orden, cwd=str(repo), close_fds=True,
+                             creationflags=banderas, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(
+                ["bash", "-c", f"sleep 5; '{guion}' reiniciar"],
+                cwd=str(repo), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True,
+            )
+        logger.info("Reinicio programado desde Telegram; el proceso externo reemplaza al nodo")
+    except Exception as e:
+        logger.error(f"No pude programar el reinicio: {e}", exc_info=True)
+        await chat.send_message(
+            f"⚠️ Actualicé a <code>{despues}</code> pero no pude relanzar el nodo: {str(e)[:120]}\n"
+            "El bot sigue vivo con el codigo viejo. Reintenta /actualizar."
+        )
 
 
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -160,10 +239,9 @@ async def reiniciar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if vivo:
         await update.effective_chat.send_message(
             "Polling activo y respondiendo.\n\n"
-            "No reinicio el updater desde aqui a proposito: hacerlo cancela la tarea "
-            "que atiende este mensaje y el bot queda mudo hasta reiniciar el proceso.\n"
-            "Para un reinicio real, en la PC:\n"
-            "  .\\nodo\\kynikos.ps1 reiniciar"
+            "Polling vivo. Para traer cambios y reiniciar de verdad usa "
+            "/actualizar: lanza el reinicio desde un proceso externo, asi no se "
+            "cancela a si mismo."
         )
         return
 
@@ -328,6 +406,42 @@ async def send_alert(message: str, settings: Settings) -> bool:
         return False
 
 
+async def _avisar_arranque(settings: Settings) -> None:
+    """Avisa al jefe de que el nodo volvio, con commit y PID.
+
+    Sirve para operar sin consola: tras /actualizar el proceso se reinicia solo,
+    y este mensaje es la prueba de que volvio vivo. Si no llega, algo fallo y
+    hay que mirar la PC.
+    """
+    import os
+    import subprocess
+    from pathlib import Path
+
+    destino = settings.telegram_user_id or settings.tech_telegram_chat_id
+    if not destino or not _app:
+        return
+    repo = Path(__file__).resolve().parents[2]
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        ).stdout.strip() or "?"
+    except Exception:
+        commit = "?"
+    try:
+        await _app.bot.send_message(
+            chat_id=int(destino),
+            text=(f"🟢 <b>Nodo arriba</b>\n"
+                  f"Commit: <code>{commit}</code>\n"
+                  f"PID: <code>{os.getpid()}</code>\n"
+                  f"Salida max: {settings.max_tokens_salida} tokens"),
+            parse_mode="HTML",
+        )
+        logger.info("Aviso de arranque enviado al jefe")
+    except Exception as e:
+        logger.warning(f"No pude avisar del arranque: {e}")
+
+
 async def start_telegram_bot(settings: Settings, agent_loop=None, session_manager=None) -> None:
     """Start Telegram bot."""
     global _app, _loop, _sessions
@@ -349,6 +463,7 @@ async def start_telegram_bot(settings: Settings, agent_loop=None, session_manage
         _app.add_handler(CommandHandler("info", info))
         _app.add_handler(CommandHandler("id", mi_id))
         _app.add_handler(CommandHandler("reiniciar", reiniciar))
+        _app.add_handler(CommandHandler("actualizar", actualizar))
         _app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         await _app.initialize()
         await _app.start()
@@ -359,6 +474,7 @@ async def start_telegram_bot(settings: Settings, agent_loop=None, session_manage
         import time as _t
         _arranque = _t.time()
         logger.info("🟢 Telegram bot polling started")
+        await _avisar_arranque(settings)
     except Exception as e:
         logger.error(f"Telegram bot error: {e}", exc_info=True)
 
