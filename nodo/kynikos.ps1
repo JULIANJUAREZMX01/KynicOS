@@ -519,8 +519,10 @@ function Paso-Arrancar {
         Mal ("lance el PID " + $proc.Id + " pero atiende el " + $vivo[0].ProcessId)
         Aviso "habia un proceso anterior que no murio; el lanzado no pudo tomar el puerto"
         Aviso "ejecuta como administrador: .\nodo\kynikos.ps1 reiniciar"
-    } else {
+    } elseif ($vivo) {
         Bien "proceso vivo (PID $($proc.Id)) y es el que atiende"
+    } else {
+        Aviso ("lance el PID " + $proc.Id + ", pero el puerto $script:puerto aun no responde")
     }
     Set-CommitCargado (Get-CommitActual)
 }
