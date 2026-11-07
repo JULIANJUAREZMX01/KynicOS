@@ -463,6 +463,7 @@ function Paso-Comandos {
 
     $comandos = @(
         @{ command = "start";     description = "Saludo y estado de KynicOS" },
+        @{ command = "info";      description = "Ficha tecnica real del nodo" },
         @{ command = "estado";    description = "Salud del nodo: modelo, RAM, polling" },
         @{ command = "modelo";    description = "Modelo activo y contexto" },
         @{ command = "logs";      description = "Ultimas lineas del registro" },

@@ -88,8 +88,17 @@ class ConciergeAgentLoop(AgentLoop):
         return await super().process_message(ctx)
 
     def _build_system_prompt(self, ctx: AgentContext) -> str:
-        """Usa el system prompt de la persona activa"""
-        return self.persona.system_prompt
+        """Persona activa + configuracion real del nodo.
+
+        Sin el bloque de autoconocimiento el modelo inventa: dijo que su modelo
+        era "Ollama", que no tenia acceso al sistema y dio una URL de GitHub
+        que no existe. Los datos salen del sistema, no del modelo.
+        """
+        from app.core.autoconocimiento import bloque_sistema
+        try:
+            return self.persona.system_prompt + bloque_sistema()
+        except Exception:
+            return self.persona.system_prompt
 
     async def _escalate_maintenance_ticket(
         self, ctx: AgentContext, symptom_key: str,

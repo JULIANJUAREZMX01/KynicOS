@@ -192,6 +192,17 @@ async def version(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(texto, parse_mode="HTML")
 
 
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ficha tecnica del nodo, leida del sistema. Sin inventar."""
+    from app.core.autoconocimiento import texto_para_usuario
+    try:
+        texto = texto_para_usuario()
+    except Exception as e:
+        logger.error(f"Error en /info: {e}")
+        texto = "No pude leer mi configuracion del sistema."
+    await update.message.reply_text(texto, parse_mode="HTML")
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming messages with agent loop."""
     user = update.effective_user
@@ -265,6 +276,7 @@ async def start_telegram_bot(settings: Settings) -> None:
         _app.add_handler(CommandHandler("modelo", modelo))
         _app.add_handler(CommandHandler("logs", logs))
         _app.add_handler(CommandHandler("version", version))
+        _app.add_handler(CommandHandler("info", info))
         _app.add_handler(CommandHandler("id", mi_id))
         _app.add_handler(CommandHandler("reiniciar", reiniciar))
         _app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
