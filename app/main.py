@@ -5,8 +5,9 @@ Monorepo unificado: nanobot-cloud + KYNYKOS_AI_Agent + MueveCancún skills
 
 import asyncio
 import os
+import secrets
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, Query, Depends, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -143,7 +144,43 @@ async def root():
     }
 
 
-@app.get("/api/status")
+def _token_esperado() -> str:
+    try:
+        return (getattr(Settings(), "kynikos_api_token", "") or "").strip()
+    except Exception:
+        return (os.getenv("KYNIKOS_API_TOKEN") or "").strip()
+
+
+async def requiere_token(
+    x_kynikos_token: str = Header(default=""),
+    token: str = Query(default=""),
+):
+    """Protege el estado del nodo.
+
+    Falla cerrado: si no hay KYNIKOS_API_TOKEN configurado, la ruta responde 503
+    en vez de abrirse. Un endpoint de diagnostico abierto revela PID, persona y
+    estado del token a cualquiera que acierte la URL; con un tunel delante, eso
+    incluye a todo internet.
+    """
+    esperado = _token_esperado()
+    if not esperado:
+        raise HTTPException(
+            status_code=503,
+            detail="KYNIKOS_API_TOKEN no configurado: el estado esta cerrado por seguridad",
+        )
+    recibido = (x_kynikos_token or token or "").strip()
+    if not recibido or not secrets.compare_digest(recibido, esperado):
+        raise HTTPException(status_code=401, detail="token requerido")
+    return True
+
+
+@app.get("/api/health")
+async def health():
+    """Latido minimo para monitores y tuneles. No revela nada del nodo."""
+    return {"ok": True, "service": "kynikos"}
+
+
+@app.get("/api/status", dependencies=[Depends(requiere_token)])
 async def status():
     """Estado real, no un saludo.
 

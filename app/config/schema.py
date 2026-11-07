@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     kynikos_palabra_1: str = ""      # palabra del primer paso
     kynikos_palabra_2: str = ""      # palabra del segundo paso (opcional)
     kynikos_estado_dir: str = ".kynikos"  # estado, bloqueos e intentos fallidos
+    # Token de la API de estado. Sin el, /api/status falla cerrado (503).
+    kynikos_api_token: str = ""
 
     telegram_webhook_secret: str = ""  # valida el webhook de Telegram en serverless
     public_base_url: str = ""  # URL publica, necesaria para registrar el webhook

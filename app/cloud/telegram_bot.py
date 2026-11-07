@@ -163,6 +163,22 @@ async def reiniciar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_chat.send_message(f"No pude levantarlo: {e}")
 
 
+async def instalar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Diagnóstico del nodo a partir de sus registros.
+
+    Determinista: no pasa por el modelo, así que no puede inventar la causa.
+    Nació de la noche del 6-nov, cuando todo el diagnóstico lo hizo una persona
+    leyendo pantallas mientras el bot solo decía que no arrancaba.
+    """
+    from app.core.diagnostico import texto_para_usuario
+    try:
+        texto = texto_para_usuario()
+    except Exception as e:
+        logger.error(f"Error en /instalar: {e}")
+        texto = "No pude leer los registros del nodo."
+    await update.message.reply_text(texto, parse_mode="HTML")
+
+
 async def version(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Version local frente a la ultima publicada, sin tocar nada."""
     import subprocess
@@ -290,6 +306,7 @@ async def start_telegram_bot(settings: Settings) -> None:
         _app.add_handler(CommandHandler("modelo", modelo))
         _app.add_handler(CommandHandler("logs", logs))
         _app.add_handler(CommandHandler("version", version))
+        _app.add_handler(CommandHandler("instalar", instalar))
         _app.add_handler(CommandHandler("info", info))
         _app.add_handler(CommandHandler("id", mi_id))
         _app.add_handler(CommandHandler("reiniciar", reiniciar))

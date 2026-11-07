@@ -22,7 +22,7 @@
 param(
     [Parameter(Position = 0)]
     [ValidateSet("auto", "instalar", "configurar", "arrancar", "validar",
-                 "estado", "detener", "reparar", "reiniciar", "tarea", "doctor", "logs", "comandos", "centro")]
+                 "estado", "detener", "reparar", "reiniciar", "api", "tarea", "doctor", "logs", "comandos", "centro")]
     [string]$Accion = "auto",
 
     [string]$Modelo = "",
@@ -341,9 +341,26 @@ function Paso-Entorno($m) {
     Bien "entorno con telegram, loguru y httpx"
 }
 
+function Asegurar-TokenApi {
+    # /api/status falla cerrado sin este token. Se genera solo, una vez, y se
+    # guarda en .env. Sin esto, cualquiera con la URL veria PID y persona.
+    $h = Leer-Env
+    if ($h.ContainsKey("KYNIKOS_API_TOKEN") -and -not [string]::IsNullOrWhiteSpace($h["KYNIKOS_API_TOKEN"])) {
+        return $h["KYNIKOS_API_TOKEN"]
+    }
+    $bytes = New-Object byte[] 24
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $rng.GetBytes($bytes)
+    $tok = (($bytes | ForEach-Object { $_.ToString("x2") }) -join "")
+    if (Test-Path $script:envFile) { Add-Content -Path $script:envFile -Value "KYNIKOS_API_TOKEN=$tok" -Encoding UTF8 }
+    Aviso "token de API generado: /api/status queda cerrado y solo responde con el"
+    return $tok
+}
+
 function Paso-Config($m) {
     Paso "Configuracion"
     $h = Leer-Env
+    Asegurar-TokenApi | Out-Null
     $usuario = ""
     if ($h.ContainsKey("TELEGRAM_TOKEN")) { $usuario = Test-Token $h["TELEGRAM_TOKEN"] }
 
@@ -378,8 +395,14 @@ function Paso-Config($m) {
 
     if (Test-Path $script:envFile) { Copy-Item $script:envFile "$($script:envFile).anterior" -Force }
 
+    # Token de la API de estado: se genera aqui y se escribe en la misma tanda.
+    $apiBytes = New-Object byte[] 24
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($apiBytes)
+    $apiToken = (($apiBytes | ForEach-Object { $_.ToString("x2") }) -join "")
+
     $lineas = @(
         "TELEGRAM_TOKEN=$token",
+        "KYNIKOS_API_TOKEN=$apiToken",
         "TELEGRAM_USER_ID=8247886073",
         "PERSONA=kynikos",
         "KYNIKOS_PALABRA_1=$palabra",
@@ -535,6 +558,7 @@ function Paso-Comandos {
 
     $comandos = @(
         @{ command = "start";     description = "Saludo y estado de KynicOS" },
+        @{ command = "instalar";  description = "Diagnostico del nodo desde sus registros" },
         @{ command = "info";      description = "Ficha tecnica real del nodo" },
         @{ command = "estado";    description = "Salud del nodo: modelo, RAM, polling" },
         @{ command = "modelo";    description = "Modelo activo y contexto" },
@@ -702,6 +726,35 @@ switch ($Accion) {
     # Reinicio a la fuerza, sin diagnosticar nada. Para cuando el jefe quiere
     # garantizar que el proceso vivo es el del codigo en disco.
     "reiniciar"  { Paso-Detener; Paso-Arrancar; if (Paso-Validar) { exit 0 } else { exit 1 } }
+    # Consulta el estado protegido con el token del .env, sin exponerlo.
+    "api" {
+        Paso "API de estado"
+        $h = Leer-Env
+        $tok = $h["KYNIKOS_API_TOKEN"]
+        if ([string]::IsNullOrWhiteSpace($tok)) {
+            Mal "sin KYNIKOS_API_TOKEN en .env"
+            Aviso "corre: .\nodo\kynikos.ps1 configurar"
+            exit 1
+        }
+        if (-not (Nodo-Vivo)) { Mal "el nodo no esta corriendo"; exit 1 }
+        try {
+            $salud = Invoke-RestMethod -Uri "http://127.0.0.1:$($script:puerto)/api/health" -TimeoutSec 10
+            Bien ("health publico: " + ($salud | ConvertTo-Json -Compress))
+        } catch {
+            Aviso "health no responde todavia"
+        }
+        try {
+            $r = Invoke-RestMethod -Uri "http://127.0.0.1:$($script:puerto)/api/status" `
+                -Headers @{ "X-Kynikos-Token" = $tok } -TimeoutSec 15
+            Bien "status autorizado:"
+            $r | ConvertTo-Json -Depth 4
+        } catch {
+            Mal ("status rechazo la peticion: " + $_.Exception.Message)
+            Aviso "si es 401, el token del .env no es el que cargo el nodo: reinicia"
+            exit 1
+        }
+    }
+
     "tarea"      { Paso-Tarea }
     "comandos"   { Paso-Comandos }
     "centro" {
@@ -722,6 +775,10 @@ switch ($Accion) {
     "estado" {
         Paso "Estado del nodo"
         if (Test-Entorno) { Bien "entorno completo" } else { Aviso "entorno incompleto" }
+        $envActual = Leer-Env
+        if ([string]::IsNullOrWhiteSpace($envActual["KYNIKOS_API_TOKEN"])) {
+            Aviso "sin KYNIKOS_API_TOKEN: /api/status responde 503 (cerrado por seguridad)"
+        } else { Bien "API de estado protegida con token" }
         $p = Nodo-Vivo
         $t = Probar-Token (Leer-Env)["TELEGRAM_TOKEN"]
         if ($t -like "ok:*") { Bien ("token de @" + $t.Substring(3)) }
