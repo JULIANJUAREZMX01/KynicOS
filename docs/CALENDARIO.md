@@ -83,3 +83,10 @@ odo\kynikos.ps1` y confirmar con
 | 2026-11-06 | Nodo KynicOS | `reparar` decia "nada que reparar" y no reiniciaba: el menu de Telegram mostraba /info pero el proceso vivo corria el codigo anterior. Ahora sella el commit al arrancar, avisa cuando el proceso esta desfasado y reinicia. |
 | 2026-11-06 | Nodo KynicOS | `estado` decia "sin token valido" con el bot respondiendo: un fallo de red se pintaba igual que un token revocado. Y `reparar` creia estar al dia por un sello en disco. Ahora el token tiene tres estados y el desfase se mide por la hora de arranque del proceso. |
 | 2026-11-06 | Nodo KynicOS | `reparar` seguia creyendo al sello de disco y decia estar al dia con un PID sin reiniciar. Ahora manda la hora de arranque del proceso, y se añade la accion `reiniciar` que detiene y arranca sin diagnosticar: reinicio garantizado. |
+
+## 6 nov 2026 — auditoría de repos, PRs y reposicionamiento
+- KynicOS deja de presentarse como concierge de hotel: es el asistente de Julián (ADR-037)
+- Barrido de PRs: KynicOS 0 · KYNYKOS_AI_Agent 10 · MueveCancun 10 (9 dependabot) · Wasm-Kalpixk 10 · cantabria-pms-demo 2 (dependabot) · portafolio 1
+- README reescrito con estado verificado, 6 skills, canales/conectores y roadmap por plazos
+- Nodo operativo en commit 66da6ef, con /info y reinicio garantizado
+- Próximos pasos: proteger /api/status, /instalar en el bot, triaje de seguridad en KYNYKOS_AI_Agent

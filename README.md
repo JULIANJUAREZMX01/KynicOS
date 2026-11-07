@@ -1,16 +1,21 @@
-# KynicOS 🏨
+# KynicOS 🐕
 
-**Cognitive Operations System for Hospitality — Concierge, Automation & AI Orchestration**
+**Asistente operativo de Julián Juárez — UNT Tecnologías Computacionales Cancún**
 
-KynicOS is a unified AI operations platform designed for hospitality environments in Cancún. It combines a persistent agent context, multi-provider LLM routing, operational skills, guest-facing channels, maintenance escalation, session persistence, observability and controlled automation into a single runtime.
+KynicOS **no es un concierge de hotel**. Es el asistente personal y de
+infraestructura del jefe: corre en hardware propio, con modelo local, y vive en
+Telegram, la web y WhatsApp. Piensa, ejecuta skills, vigila el nodo y se
+actualiza solo en cada reinicio.
 
-> **KynicOS is not just a chatbot.** It is an orchestration layer between guests, hotel operations, AI providers, persistent context and executable skills.
+> No es un chatbot: es el nodo primario que orquesta el resto del ecosistema.
+> Los modos de concierge (LEO, MueveCancún, Nexus) siguen existiendo como
+> personas opcionales, pero el default y el propósito del proyecto es el
+> asistente.
 
 <!-- STATUS:START -->
-> 🧠 **Agent orchestration** | 🔌 **Multi-provider LLM** | 🧰 **Operational Skills** | 💾 **Persistent Sessions** | 🐕 **Runtime Sentinel** | 🧪 **CI Verification**
+> 🧠 **Asistente con contexto persistente** | 🔌 **Multi-proveedor LLM** | 🧰 **6 skills operativas** | 💾 **Sesiones en disco** | 🐕 **Sentinel en vivo** | 🔄 **Arranque idempotente** | 🧪 **CI en verde**
 <!-- STATUS:END -->
 
----
 
 ## 🚀 Arranque
 
@@ -27,6 +32,93 @@ Sin argumentos hace el flujo completo y verifica cada paso. Para el menú visual
 **Todos los comandos, subcomandos y el mapa de archivos: → [docs/ARRANQUE.md](docs/ARRANQUE.md)**
 
 Ese documento es la fuente única. Cualquier otro que repita comandos de arranque está obsoleto por definición (ADR-031).
+
+## 🎯 Qué hace hoy (verificado el 6-nov-2026)
+
+| Área | Estado | Evidencia |
+| --- | --- | --- |
+| Nodo en Windows | Operativo | Proceso vivo, polling de Telegram activo, `VALIDADO: el nodo esta escuchando a Telegram` |
+| Arranque | Idempotente | La tarea de inicio compara commit con GitHub, verifica dependencias por huella y arranca solo si hace falta (ADR-033) |
+| Autoconocimiento | Verificado | Responde con su configuración real; `/info` no pasa por el modelo (ADR-036) |
+| Intención | Corregida | Detección por palabra completa; ya no contesta rutas a quien saluda (ADR-035) |
+| Enlaces | Vivos | App de rutas apunta a Vercel (200), no al Render suspendido (503) |
+| CI | Verde | Suite de pruebas en verde; `KynicOS Tests` sin fallos |
+
+### Comandos del bot
+
+| Comando | Qué hace |
+| --- | --- |
+| `/info` | Ficha técnica real: modelo, stack, máquina, repo, commit |
+| `/estado` | Salud: modelo, contexto, PID, RAM, polling |
+| `/version` | Commit local frente al último publicado en GitHub |
+| `/logs` | Últimas líneas del registro |
+| `/modelo`, `/id`, `/reiniciar`, `/ayuda`, `/start` | Modelo activo, ID de Telegram, reinicio del polling, lista, saludo |
+
+### Habilidades (skills locales)
+
+| Skill | Qué resuelve |
+| --- | --- |
+| `hvac_triage` | Diagnóstico de fallas de climatización con escalado por prioridad |
+| `mueve_cancun` | Rutas de transporte en Cancún con enlaces vivos |
+| `web_research` | Investigación web estructurada |
+| `last30days` | Resumen de los últimos 30 días de actividad |
+| `memory_manager` | Lectura y escritura de la memoria compartida |
+| `skill_builder` | Creación de skills nuevas desde plantilla |
+
+### Canales y conectores
+
+| Canal / proveedor | Estado |
+| --- | --- |
+| Telegram (`@kynicOS_robot`) | **Activo**, por polling |
+| Web (`POST /api/chat`, PWA en `web/`) | Disponible en el nodo |
+| WhatsApp (Twilio) | Código listo, **desactivado** por falta de credenciales |
+| Ollama local | **Activo**, último recurso y default en el nodo |
+| Groq / Anthropic | Se activan solos si existen sus claves en el `.env` |
+| GitHub | Autorizado para trabajo de repositorios |
+
+**Límite conocido:** `/api/status` no exige autenticación. No debe exponerse al
+exterior (túnel o puerto abierto) hasta protegerlo con la palabra de dos pasos
+(ADR-032).
+
+## 🔀 PRs pendientes de merge
+
+Barrido del 6-nov-2026 con la API de GitHub. Regla: máximo un PR abierto por
+persona y repo; nada se mergea sin revisión de Julián.
+
+| Repositorio | PRs | Contenido y criterio |
+| --- | --- | --- |
+| `KynicOS` | 0 | Limpio |
+| `KYNYKOS_AI_Agent` | 10 | Personas Jules. Prioridad: #49 y #19 (seguridad, `shell=True`), #52 y #50 (rendimiento en el enrutado de la skill de transporte), #53/#51 (accesibilidad), #43/#39 (rendimiento), #35/#30 (limpieza) |
+| `MueveCancun` | 10 | Nueve son `dependabot` (astro, vite, sharp, node). Se agrupan en una sola actualización; el #596 (caché O(1)) se revisa aparte |
+| `Wasm-Kalpixk_IA_DevOps` | 10 | Ocho de Sentinel con correcciones reales de seguridad (timestamps UTC, `request.client` nulo, subprocess). Agrupar en un PR de seguridad |
+| `cantabria-pms-demo` | 2 | `dependabot`: `@types/node` y `astro`. Merge directo si el CI está en verde |
+| `JULIANJUAREZMX01.github.io` | 1 | #2: migración de Jules y bucle de entrenamiento. Revisión de contenido, no de código |
+| `python-orchestrator-node`, `sanaciones-cuanticas` | 0 | Limpios |
+
+## 🗺️ Roadmap
+
+**Ahora (cerrado):** nodo estable, arranque idempotente, autoconocimiento, detección
+de intención y enlaces vivos.
+
+**Siguiente (corto plazo)**
+
+1. Proteger `/api/status` con autenticación de dos pasos antes de exponer nada.
+2. `/instalar` en el bot: leer el registro y decir en qué paso falló, en lugar de
+   mandar al jefe a probar a mano.
+3. Triaje de los 10 PRs de `KYNYKOS_AI_Agent`: los de seguridad primero.
+4. Agrupar los `dependabot` de `MueveCancun` y `cantabria-pms-demo` en un solo PR
+   por repo, con CI verde.
+
+**Medio plazo**
+
+5. Capa visual del centro de mando: panel web en el propio FastAPI (ADR-032).
+6. WhatsApp real cuando existan las credenciales de Twilio.
+7. Segundo cerebro: memoria consultable desde el bot, no solo archivos.
+
+**Largo plazo**
+
+8. Evaluar consolidación de `app/` entre KynicOS y KYNYKOS_AI_Agent, módulo por
+   módulo y con ADR propio. La divergencia actual es intencional (ADR-034).
 
 ## 🔗 Quick Links
 
@@ -45,7 +137,11 @@ Ese documento es la fuente única. Cualquier otro que repita comandos de arranqu
 
 KynicOS nace de una necesidad operacional concreta: **convertir una conversación en una acción verificable**.
 
-En un entorno hotelero, una solicitud puede comenzar como:
+Su propósito actual es ser el **asistente del jefe**: responder, ejecutar y
+vigilar. El entorno hotelero (Cantabria, MueveCancún) fue el primer campo de
+pruebas y sigue siendo un caso de uso válido, pero ya no define el producto.
+
+Ejemplo de esa cadena, heredado de ese primer caso:
 
 ```text
 "Mi habitación no tiene frío."
