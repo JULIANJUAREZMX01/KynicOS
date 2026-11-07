@@ -92,3 +92,4 @@ odo\kynikos.ps1` y confirmar con
 - Próximos pasos: proteger /api/status, /instalar en el bot, triaje de seguridad en KYNYKOS_AI_Agent
 | 2026-11-06 | Nodo KynicOS | "El bot no responde": dos procesos del nodo (13644 y 21748) peleando por el mismo token de Telegram (409). Paso-Detener ahora mata todos los procesos del nodo y estado avisa de duplicados. ADR-038. |
 | 2026-11-06 | Repos | /info verificado en Telegram (ficha real, commit y ruta correctos). Actualizada la descripcion del repositorio en GitHub, que aun decia Concierge de Ultra-Lujo. La RAM ya se lee del sistema sin psutil. |
+| 2026-11-06 | Nodo KynicOS | /reiniciar dejaba el bot mudo: detenia el updater desde su propio handler y la tarea se cancelaba a si misma, asi que start nunca corria. Ahora solo confirma el polling y remite al reinicio desde la PC. ADR-039. |

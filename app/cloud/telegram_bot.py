@@ -128,25 +128,39 @@ async def mi_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def reiniciar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Reinicia el polling del bot sin matar el proceso.
+    """Informa del estado del polling SIN matar el updater.
 
-    No se relanza el proceso: en Windows eso puede dejar el puerto 8000
-    atrapado y una instancia huerfana haciendo polling. Reiniciar el bot
-    resuelve el caso real (sesion de Telegram atascada).
+    Antes hacia stop + sleep + start DENTRO del propio handler. stop_telegram_bot()
+    detiene el updater, y detenerlo cancela la tarea que esta ejecutando este
+    mismo codigo: start_telegram_bot() nunca llegaba a correr y el bot quedaba
+    mudo hasta reiniciar el proceso. Paso el 6-nov: /reiniciar respondio
+    "Reiniciando el bot..." y despues no contesto nada, ni /estado.
+
+    Desde aqui no se puede reiniciar el updater de forma segura. Si esta vivo,
+    se confirma; si esta caido, se levanta (eso si es seguro, porque no hay
+    updater que cancelar).
     """
-    import asyncio
-    from app.cloud.telegram_bot import stop_telegram_bot, start_telegram_bot
+    from app.cloud import telegram_bot as tb
 
-    await update.message.reply_text("Reiniciando el bot...")
+    vivo = bool(tb._app and tb._app.updater and tb._app.updater.running)
+    if vivo:
+        await update.effective_chat.send_message(
+            "Polling activo y respondiendo.\n\n"
+            "No reinicio el updater desde aqui a proposito: hacerlo cancela la tarea "
+            "que atiende este mensaje y el bot queda mudo hasta reiniciar el proceso.\n"
+            "Para un reinicio real, en la PC:\n"
+            "  .\\nodo\\kynikos.ps1 reiniciar"
+        )
+        return
+
     try:
-        await stop_telegram_bot()
-        await asyncio.sleep(2)
-        await start_telegram_bot()
-        await update.effective_chat.send_message("Listo, bot reiniciado y escuchando.")
-        logger.info("Reinicio manual solicitado desde Telegram")
+        from app.config import Settings
+        await start_telegram_bot(Settings())
+        await update.effective_chat.send_message("El polling estaba caido; lo levante de nuevo.")
+        logger.info("Polling levantado desde Telegram (estaba caido)")
     except Exception as e:
-        logger.error(f"Fallo al reiniciar: {e}")
-        await update.effective_chat.send_message(f"No pude reiniciar: {e}")
+        logger.error(f"No pude levantar el polling: {e}")
+        await update.effective_chat.send_message(f"No pude levantarlo: {e}")
 
 
 async def version(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
