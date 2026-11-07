@@ -195,6 +195,26 @@ function Paso-Repositorio {
     else { Bien ("actualizado a " + $nuevo.Substring(0,7)) }
 }
 
+function Get-CommitActual {
+    $c = (git -C $repo rev-parse --short HEAD 2>$null)
+    if ($c) { return $c.Trim() } else { return "" }
+}
+
+function Get-CommitCargado {
+    # Commit con el que se lanzo el proceso vivo. Si el repo avanzo y el nodo
+    # no se reinicio, el bot corre codigo viejo: los comandos nuevos aparecen
+    # en el menu de Telegram pero fallan al pulsarlos.
+    $f = Join-Path $repo ".kynikos\commit_cargado"
+    if (Test-Path $f) { return ((Get-Content $f -Raw) -replace "\s", "") }
+    return ""
+}
+
+function Set-CommitCargado($c) {
+    if (-not $c) { return }
+    New-Item -ItemType Directory -Force -Path (Join-Path $repo ".kynikos") | Out-Null
+    $c | Set-Content (Join-Path $repo ".kynikos\commit_cargado")
+}
+
 function Get-HuellaDeps {
     # Huella de los requirements: si cambian, se reinstalan encima del entorno
     # existente. Nunca se borra .venv: recrear el entorno en cada arranque es
@@ -396,6 +416,7 @@ function Paso-Arrancar {
     New-Item -ItemType Directory -Force -Path (Join-Path $repo ".kynikos") | Out-Null
     $proc.Id | Set-Content (Join-Path $repo ".kynikos\nodo.pid")
     Bien "proceso vivo (PID $($proc.Id))"
+    Set-CommitCargado (Get-CommitActual)
 }
 
 function Paso-Validar {
@@ -593,7 +614,25 @@ switch ($Accion) {
     "arrancar"   { Paso-Arrancar }
     "validar"    { if (Paso-Validar) { exit 0 } else { exit 1 } }
     "detener"    { Paso-Detener }
-    "reparar"    { Paso; if (Test-Entorno) { Bien "nada que reparar" } else { Paso-Entorno "qwen2.5:7b" } }
+    "reparar"    {
+        Paso "Reparacion"
+        if (-not (Test-Entorno)) { Paso-Entorno "qwen2.5:7b" }
+        $cargado = Get-CommitCargado
+        $actual = Get-CommitActual
+        $vivo = Nodo-Vivo
+        if ($vivo -and $cargado -and $actual -and ($cargado -ne $actual)) {
+            Aviso ("el nodo corre " + $cargado + " y el repositorio esta en " + $actual)
+            Aviso "reiniciando para cargar el codigo nuevo"
+            Paso-Detener
+            Paso-Arrancar
+        } elseif ($vivo) {
+            Bien ("el nodo ya corre la version " + $actual + "; nada que reparar")
+        } else {
+            Aviso "el nodo no esta corriendo; arrancando"
+            Paso-Arrancar
+        }
+        if (Paso-Validar) { exit 0 } else { exit 1 }
+    }
     "tarea"      { Paso-Tarea }
     "comandos"   { Paso-Comandos }
     "centro" {
@@ -617,7 +656,15 @@ switch ($Accion) {
         $u = Test-Token (Leer-Env)["TELEGRAM_TOKEN"]
         if ($u) { Bien "token de @$u" } else { Mal "sin token valido" }
         $p = Nodo-Vivo
-        if ($p) { Bien "corriendo (PID $($p[0].ProcessId))" } else { Aviso "detenido" }
+        if ($p) {
+            Bien "corriendo (PID $($p[0].ProcessId))"
+            $cargado = Get-CommitCargado
+            $actual = Get-CommitActual
+            if ($cargado -and $actual -and ($cargado -ne $actual)) {
+                Aviso ("corre " + $cargado + " pero el repositorio esta en " + $actual)
+                Aviso "el bot sigue con codigo viejo; ejecuta: .\nodo\kynikos.ps1 reparar"
+            }
+        } else { Aviso "detenido" }
         $t = Get-ScheduledTask -TaskName $script:tareaNombre -ErrorAction SilentlyContinue
         if ($t) { Bien "tarea de arranque registrada" } else { Aviso "sin tarea de arranque" }
     }
