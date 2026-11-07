@@ -128,6 +128,9 @@ function Nodo-Vivo {
     # ...y por puerto: una instancia lanzada por la tarea programada puede tener
     # otra linea de comandos y seguir ocupando el 8000. Eso fue lo que tumbo el
     # arranque con [Errno 10048].
+    # $pid es automatica y de solo lectura en PowerShell: usarla como iterador
+    # lanza 'No se puede sobrescribir la variable PID' y el script muere antes
+    # de comprobar nada. De ahi el 'PID 0' y el falso 'puerto sigue ocupado'.
     foreach ($procId in (Get-ProcesoPuerto $script:puerto)) {
         $q = Get-Process -Id $procId -ErrorAction SilentlyContinue
         if ($q) { return @([pscustomobject]@{ ProcessId = $procId; Name = $q.ProcessName }) }
@@ -141,12 +144,11 @@ function Get-ProcesoPuerto($puerto) {
     # 1) cmdlet nativo: no depende del idioma del sistema.
     try {
         foreach ($c in (Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction Stop)) {
-            $ids += [int]$c.OwningProcess
+            $cand = [int]$c.OwningProcess
+            if ($cand -gt 0) { $ids += $cand }
         }
     } catch { }
-    # OwningProcess 0 es el sistema, no un proceso matable: se descarta.
-    $ids = @($ids | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
-    if ($ids.Count -gt 0) { return @($ids) }
+    if ($ids.Count -gt 0) { return @($ids | Sort-Object -Unique) }
 
     # 2) netstat de respaldo. NO se busca 'LISTENING': en Windows en espanol
     #    el estado se llama 'ESCUCHANDO', y el detector devolvia vacio siempre
@@ -154,11 +156,17 @@ function Get-ProcesoPuerto($puerto) {
     #    la direccion LOCAL (primer campo) y se toma el PID final de la linea.
     $salida = @()
     try { $salida = netstat -ano 2>$null } catch { return @() }
+    # Se exige ademas que el destino sea comodin (0.0.0.0:0 o [::]:0), que es
+    # lo que distingue una fila en escucha de un TIME_WAIT. Sin ese filtro las
+    # conexiones cerradas aportaban PID 0 y el script gritaba "el puerto sigue
+    # ocupado por el PID 0" aunque el puerto estuviera libre.
     $local = "^\s*TCP\s+\S*[:.]$puerto\s"
-    $final = "(\d+)\s*$"
+    $remotoComodin = "\s(0\.0\.0\.0:0|\[::\]:0|\*:\*)\s"
+    $final = "\s(\d+)\s*$"
     foreach ($linea in $salida) {
-        if (($linea -match $local) -and ($linea -match $final)) {
-            $ids += [int]$Matches[1]
+        if (($linea -match $local) -and ($linea -match $remotoComodin) -and ($linea -match $final)) {
+            $cand = [int]$Matches[1]
+            if ($cand -gt 0) { $ids += $cand }
         }
     }
     return @($ids | Sort-Object -Unique)
@@ -453,20 +461,9 @@ function Paso-Detener {
     }
     if (Test-PuertoLibre $script:puerto) { Bien "nodo anterior detenido; puerto $script:puerto libre" }
     else {
-        $ocupantes = @(Get-ProcesoPuerto $script:puerto | Where-Object { $_ -gt 0 })
-        if ($ocupantes.Count -gt 0) {
-            Mal "el puerto $script:puerto sigue ocupado por el PID $($ocupantes -join ', ')"
-            Aviso "abre una consola como administrador y ejecuta:"
-            Aviso ("  Stop-Process -Id " + ($ocupantes -join ',') + " -Force")
-        } else {
-            # OwningProcess 0 = el sistema no nos deja ver quien es (o es la
-            # pila TCP). Nunca se sugiere matar el PID 0.
-            Mal "el puerto $script:puerto esta ocupado pero no puedo ver que proceso lo tiene"
-            Aviso "abre una consola como administrador y mira quien escucha ahi:"
-            Aviso ("  Get-NetTCPConnection -LocalPort " + $script:puerto + " -State Listen | Select-Object OwningProcess")
-            Aviso "si sale un PID concreto:  Stop-Process -Id <ese PID> -Force"
-            Aviso "si sigue sin aparecer, reinicia el equipo: es un socket del sistema"
-        }
+        Mal "el puerto $script:puerto sigue ocupado por el PID $((Get-ProcesoPuerto $script:puerto) -join ', ')"
+        Aviso "abre una consola como administrador y ejecuta:"
+        Aviso "  Stop-Process -Id $((Get-ProcesoPuerto $script:puerto) -join ',') -Force"
         exit 1
     }
 }
