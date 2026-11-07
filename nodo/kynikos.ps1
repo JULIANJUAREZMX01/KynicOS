@@ -102,17 +102,28 @@ function Nodo-Vivo {
 }
 
 function Get-ProcesoPuerto($puerto) {
-    # netstat en vez de Get-NetTCPConnection: si el modulo NetTCPIP falla o no
-    # esta, el cmdlet devuelve vacio EN SILENCIO y el nodo parece caido aunque
-    # uvicorn diga 'Uvicorn running on http://0.0.0.0:8000'. Ese falso negativo
-    # dejo a Julian con 'FALLO el nodo no esta escuchando' seis veces seguidas.
     $ids = @()
-    $patron = "[:.]$puerto\s+\S+\s+LISTENING\s+(\d+)"
+
+    # 1) cmdlet nativo: no depende del idioma del sistema.
+    try {
+        foreach ($c in (Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction Stop)) {
+            $ids += [int]$c.OwningProcess
+        }
+    } catch { }
+    if ($ids.Count -gt 0) { return @($ids | Sort-Object -Unique) }
+
+    # 2) netstat de respaldo. NO se busca 'LISTENING': en Windows en espanol
+    #    el estado se llama 'ESCUCHANDO', y el detector devolvia vacio siempre
+    #    aunque uvicorn dijera 'Uvicorn running on 0.0.0.0:8000'. Se filtra por
+    #    la direccion LOCAL (primer campo) y se toma el PID final de la linea.
     $salida = @()
     try { $salida = netstat -ano 2>$null } catch { return @() }
+    $local = "^\s*TCP\s+\S*[:.]$puerto\s"
+    $final = "(\d+)\s*$"
     foreach ($linea in $salida) {
-        $m = [regex]::Match($linea, $patron, 'IgnoreCase')
-        if ($m.Success) { $ids += [int]$m.Groups[1].Value }
+        if (($linea -match $local) -and ($linea -match $final)) {
+            $ids += [int]$Matches[1]
+        }
     }
     return @($ids | Sort-Object -Unique)
 }
@@ -410,7 +421,11 @@ function Paso-Validar {
         $error401 = $texto -match "Unauthorized|401"
         $error409 = $texto -match "Conflict|409"
 
-        if ($vivo -and $puerto -and $escucha -and -not $error401) { $ok = $true; break }
+        # El polling activo es la prueba fuerte: Telegram acepta el token y el
+        # bot esta recibiendo. El puerto queda como informacion, porque su
+        # deteccion depende de herramientas del sistema que pueden fallar o
+        # venir traducidas.
+        if ($vivo -and $escucha -and -not $error401) { $ok = $true; break }
 
         if ($error401) { $motivo = "el token del .env es rechazado (401)"; break }
         if ($error409) { $motivo = "hay otra instancia haciendo polling (409)"; break }
