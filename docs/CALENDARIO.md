@@ -75,3 +75,4 @@ odo\kynikos.ps1` y confirmar con
 | 2026-11-04 | Nodo KynicOS | Barrido: 9 formas de arrancar, 3 orquestadores y 6 documentos con comandos distintos. Se declara `kynikos.ps1` llave maestra única y `docs/ARRANQUE.md` fuente única (ADR-031). |
 | 2026-11-04 | Nodo KynicOS | ADR-032: una sola llave (alias a legacy/), evaluacion de capas visuales (panel web > rich > textual > ratatui) y el tunel queda condicionado a autenticacion previa. |
 | 2026-11-04 | Nodo KynicOS | Arranque idempotente (ADR-033): la tarea de inicio actualiza el repo, verifica dependencias por huella y arranca solo si hace falta. Nada se borra. Nuevo /version en el bot. |
+| 2026-11-06 | Repos | Validada la distincion KynicOS (nodo primario, hardware propio, @kynicOS_robot) frente a KYNYKOS_AI_Agent (agente de nube, motor de herramientas grande, personas Jules). ADR-034. |
